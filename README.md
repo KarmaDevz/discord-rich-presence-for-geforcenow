@@ -50,7 +50,7 @@ A **custom Discord Rich Presence** tool that shows the game you are running on *
 
 The app uses external configuration files located in `%APPDATA%\geforce_presence`.
 
-### `.env` file
+### `env` file
 Example:
 ```env
 CLIENT_ID=123456789012345678
