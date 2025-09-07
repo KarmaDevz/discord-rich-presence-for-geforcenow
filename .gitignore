@@ -8,4 +8,6 @@ config/config_path.txt
 dist/
 build/
 scripts/
-gamelist.json
+gameslist.json
+src/geforce_presence.exe
+src/gfn.ico
