@@ -140,13 +140,6 @@ The developer of this project **is not responsible** for misuse.
 
 ---
 
-## 🤝 Contributing
-
-Contributions are welcome!  
-Fork the repository, create a branch, make your changes, and submit a pull request.
-
----
-
 ## 💬 Credits
 
 - [pypresence](https://qwertyquerty.github.io/pypresence/) – Discord Rich Presence integration  
