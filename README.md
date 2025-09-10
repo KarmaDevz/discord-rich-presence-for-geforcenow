@@ -1,7 +1,8 @@
 
 # 🎮 Discord Rich Presence for GeForce NOW
 
-
+![Discord Status Example](assets/discord_status.jpg)
+![Discord Status Example](assets/discord_status2.jpg)
 
 A **custom Discord Rich Presence** tool that shows the game you are running on **GeForce NOW**, with support for:
 - Automatically changing the Discord `client_id` based on the detected game.
