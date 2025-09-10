@@ -82,8 +82,8 @@ Example:
 
 ## ▶️ Usage
 
-1. Start GeForce NOW.  
-2. Run the installed shortcut (or the `.exe` directly).  
+1. Run the installed shortcut (or the `.exe` directly). 
+2. This will automatically start Discord and GeForce NOW
 3. Your Discord status will automatically update with the current game.
 
 ---
