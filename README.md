@@ -1,6 +1,7 @@
-# 🎮 Discord Rich Presence for GeForce NOW
 ![Version](https://img.shields.io/badge/version-v1.0.1-blue)
 ![Windows](https://img.shields.io/badge/Windows-10-brightgreen)
+# 🎮 Discord Rich Presence for GeForce NOW
+
 ![Discord Status Example](assets/discord_status.jpg)
 ![Discord Status Example](assets/discord_status2.jpg)
 
