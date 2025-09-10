@@ -16,7 +16,6 @@ A **custom Discord Rich Presence** tool that shows the game you are running on *
 
 - ✅ **Accurate GeForce NOW detection** (no false positives from browser tabs).
 - 🔄 **Dynamic `client_id` switching** per game.
-- 🌍 **Automatic translation** using Google Translate.
 - 🔐 **Optional Steam scraping** for detailed status.
 - 📁 **External configuration** for easy customization.
 - 🛡 **No-scraping mode** if you don’t provide a Steam cookie.
@@ -55,10 +54,10 @@ Example:
 CLIENT_ID=123456789012345678
 TEST_RICH_URL=https://steamcommunity.com/minigame/status/...
 STEAM_COOKIE=your_steamLoginSecure_cookie
-CONFIG_PATH_FILE=config_path.txt
+CONFIG_PATH_FILE=(You need to chose games_config_merged.json on '/config' folder)
 ```
 
-### `config/games_config.json`
+### `config/games_config_merged.json`
 Defines the supported games and Discord presence data.
 
 Example:
@@ -81,34 +80,6 @@ Example:
 
 ---
 
-## 🛠 Development Setup
-
-If you want to run from source instead of the installer:
-
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/KarmaDevz/discord-rich-presence-geforcenow.git
-   cd discord-rich-presence-geforcenow
-   ```
-
-2. Create and activate a virtual environment:
-   ```bash
-   python -m venv venv
-   .\venv\Scripts\activate
-   ```
-
-3. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-4. Run the app:
-   ```bash
-   python src/geforce.py
-   ```
-
----
-
 ## ▶️ Usage
 
 1. Start GeForce NOW.  
@@ -120,6 +91,7 @@ If you want to run from source instead of the installer:
 ## 📜 License
 
 This project is licensed under the [MIT License](LICENSE).
+The source code is currently not published. Only compiled releases are available.
 
 ---
 
