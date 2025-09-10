@@ -1,7 +1,3 @@
-<div align="center">
-  ![GitHub release (latest by date)](https://img.shields.io/github/v/release/KarmaDevz/discord-rich-presence-for-geforcenow?style=for-the-badge&label=version)
-  ![Windows 10/11](https://img.shields.io/badge/Windows-10%2F11-blue?logo=windows&logoColor=white&style=for-the-badge)
-</div>
 
 # 🎮 Discord Rich Presence for GeForce NOW
 
