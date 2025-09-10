@@ -14,7 +14,7 @@ A **custom Discord Rich Presence** tool that shows the game you are running on *
 
 ## 🚀 Features
 
-- ✅ **Accurate GeForce NOW detection** (no false positives from browser tabs).
+- ✅ **Accurate GeForce NOW detection**.
 - 🔄 **Dynamic `client_id` switching** per game.
 - 🔐 **Optional Steam scraping** for detailed status.
 - 📁 **External configuration** for easy customization.
