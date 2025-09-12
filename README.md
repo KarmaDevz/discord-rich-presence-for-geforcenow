@@ -1,8 +1,19 @@
 # 🎮 GeForce Presence — Discord Rich Presence para GeForce NOW
 
-![Discord Status Example](assets/discord_status.jpg)
-![Discord Status Example](assets/discord_status2.jpg)
+<p align="center">
+  <a href="https://github.com/TU-USUARIO/TU-REPO/releases/latest">
+    <img src="https://img.shields.io/badge/⬇️%20Descargar-Ultima%20versión-blue?style=for-the-badge" alt="Download Latest Release">
+  </a>
+</p>
 
+---
+
+<div align="center">
+
+  <img src="assets/discord_status.jpg" alt="Discord Status Example" width="45%">
+  <img src="assets/discord_status2.jpg" alt="Discord Status Example" width="45%">
+
+</div>
 Herramienta que muestra la presencia (Rich Presence) en Discord de lo que estás ejecutando en **GeForce NOW**.
 
 ### Características principales
