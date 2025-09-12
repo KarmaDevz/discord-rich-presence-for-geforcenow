@@ -1,7 +1,7 @@
 # 🎮 GeForce Presence — Discord Rich Presence para GeForce NOW
 
 <p align="center">
-  <a href="https://github.com/TU-USUARIO/TU-REPO/releases/latest">
+  <a href="https://github.com/KarmaDevz/discord-rich-presence-for-geforcenow/releases/latest">
     <img src="https://img.shields.io/badge/⬇️%20Descargar-Ultima%20versión-blue?style=for-the-badge" alt="Download Latest Release">
   </a>
 </p>
