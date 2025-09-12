@@ -53,21 +53,6 @@ STEAM_COOKIE=
 * `STEAM_COOKIE`: `steamLoginSecure` (opcional) — mejora la información de presencia.
 * `CONFIG_PATH_FILE`: ruta al `games_config.json` que se usará por defecto (el instalador y la app intentan crear/usar `%APPDATA%\geforce_presence\config\games_config_merged.json`).
 
-### `config/games_config_merged.json`
-
-Estructura típica:
-
-```json
-{
-  "Apex Legends": {
-    "name": "Apex Legends",
-    "client_id": "123456789012345678",
-    "steam_appid": "1172470",
-    "image": "steam",
-    "icon_key": "small_icon"
-  }
-}
-```
 
 ## ▶️ Uso
 
