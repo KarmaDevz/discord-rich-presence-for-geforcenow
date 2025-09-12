@@ -1,122 +1,171 @@
-
-# 🎮 Discord Rich Presence for GeForce NOW
+# 🎮 GeForce Presence — Discord Rich Presence para GeForce NOW
 
 ![Discord Status Example](assets/discord_status.jpg)
 ![Discord Status Example](assets/discord_status2.jpg)
 
-A **custom Discord Rich Presence** tool that shows the game you are running on **GeForce NOW**, with support for:
-- Automatically changing the Discord `client_id` based on the detected game.
-- Optional Steam scraping to display detailed rich presence status.
-- Automatic translation of the presence text.
-- External configuration via `.env` and `games_config.json`.
-- Works silently in the background.
+Herramienta que muestra la presencia (Rich Presence) en Discord de lo que estás ejecutando en **GeForce NOW**.
+
+### Características principales
+
+* Detecta el juego activo en GeForce NOW.
+* Cambia dinámicamente el `client_id` de Discord según el juego.
+* Opcional: scraping de Steam para obtener texto de presencia detallado.
+* Configuración externa mediante `.env` y `config/games_config_merged.json`.
+* Instalador (Inno Setup) disponible para usuarios finales.
 
 ---
 
-## 🚀 Features
+## 📦 Instalación (Usuarios)
 
-- ✅ **Accurate GeForce NOW detection**.
-- 🔄 **Dynamic `client_id` switching** per game.
-- 🔐 **Optional Steam scraping** for detailed status.
-- 📁 **External configuration** for easy customization.
-- 🛡 **No-scraping mode** if you don’t provide a Steam cookie.
-- 🖥️ **Installer wizard** for easy installation in `%APPDATA%`.
+1. Descarga el instalador:
 
----
+   * `GeForcePresenceSetup.exe` (generado con Inno Setup).
 
-## 📦 Installation (End Users)
+2. Ejecuta el instalador y sigue el asistente.
 
-1. Download the latest installer:  
-   👉 `GeForcePresenceSetup.exe` (generated with Inno Setup).
+   * Por defecto la app se instala en:
 
-2. Run the wizard:
-   - The app will be installed to:  
-     ```
+     ```text
      %APPDATA%\geforce_presence
      ```
-   - Shortcuts are created in the **Start Menu** (and optionally Desktop).
+   * Se crean accesos directos en el **Menú Inicio** (y opcionalmente en el Escritorio).
 
-3. Launch **GeForce Presence** from the shortcut, or directly run:
-   ```cmd
-   %APPDATA%\geforce_presence\geforce_presence.exe
-   ```
-
-4. Enjoy automatic Discord Rich Presence updates while using GeForce NOW. 🎉
+> **Nota:** El instalador está listo. Si quieres publicar el instalador en Releases o un instalador firmado, podemos añadir instrucciones.
 
 ---
 
-## ⚙️ Configuration
+## ⚙️ Configuración
 
-The app uses external configuration files located in `%APPDATA%\geforce_presence`.
+Los archivos de configuración principales viven en `%APPDATA%\geforce_presence`.
 
-### `env` file
-Example:
+### `.env` (ejemplo)
+
 ```env
-CLIENT_ID=123456789012345678
-TEST_RICH_URL=https://steamcommunity.com/minigame/status/...
-STEAM_COOKIE=your_steamLoginSecure_cookie
-CONFIG_PATH_FILE=(You need to chose games_config_merged.json on '/config' folder)
+CLIENT_ID=1095416975028650046
+UPDATE_INTERVAL=10
+CONFIG_PATH_FILE=
+TEST_RICH_URL=https://steamcommunity.com/dev/testrichpresence
+STEAM_COOKIE=
 ```
 
-### `config/games_config_merged.json`
-Defines the supported games and Discord presence data.
+* `CLIENT_ID`: ID por defecto para la presencia en Discord.
+* `TEST_RICH_URL`: URL usada para obtener el rich presence desde Steam (opcional).
+* `STEAM_COOKIE`: `steamLoginSecure` (opcional) — mejora la información de presencia.
+* `CONFIG_PATH_FILE`: ruta al `games_config.json` que se usará por defecto (el instalador y la app intentan crear/usar `%APPDATA%\geforce_presence\config\games_config_merged.json`).
 
-Example:
+### `config/games_config_merged.json`
+
+Estructura típica:
+
 ```json
 {
   "Apex Legends": {
     "name": "Apex Legends",
     "client_id": "123456789012345678",
-    "steam_appid": "1172470"
+    "steam_appid": "1172470",
+    "image": "steam",
+    "icon_key": "small_icon"
   }
 }
 ```
 
-**Fields:**
-- `name`: Display name for Discord Rich Presence.
-- `image`: Key for the large image asset in Discord Developer Portal.
-- `client_id`: Discord application ID.
-- `steam_appid`: (Optional) Steam AppID for rich presence scraping.
-- `icon_key`: (Optional) Small image key for the icon.
+**Campos relevantes**:
+
+* `name` — nombre mostrado.
+* `client_id` — aplicación de Discord para la presencia.
+* `steam_appid` — (opcional) AppID para scraping.
+* `image`, `icon_key` — claves de imágenes usadas en Discord.
 
 ---
 
-## ▶️ Usage
+## ▶️ Uso
 
-1. Run the installed shortcut (or the `.exe` directly). 
-2. This will automatically start Discord and GeForce NOW
-3. Your Discord status will automatically update with the current game.
+1. Ejecuta el acceso directo creado por el instalador o ejecuta directamente:
 
----
+   ```cmd
+   %APPDATA%\geforce_presence\geforce_presence.exe
+   ```
+2. La aplicación intentará abrir Discord y GeForce NOW (según tu configuración).
+3. Si no hay `CONFIG_PATH_FILE` configurado, al abrir por primera vez te pedirá seleccionar el `games_config.json`.
 
-## 📜 License
-
-This project is licensed under the [MIT License](LICENSE).
-The source code is currently not published. Only compiled releases are available.
-
----
-
-## ⚠️ Legal Disclaimer
-
-This project is **unofficial** and **not affiliated, endorsed, or sponsored** by:
-- NVIDIA Corporation (GeForce NOW)
-- Valve Corporation (Steam)
-- Discord Inc.
-
-All trademarks and logos are property of their respective owners.  
-Use of this tool is subject to the terms of service of:
-- [Discord Developer Terms of Service](https://discord.com/developers/docs/legal)
-- [Steam Subscriber Agreement](https://store.steampowered.com/subscriber_agreement/)
-- [NVIDIA Terms of Use](https://www.nvidia.com/en-us/about-nvidia/legal-info/)
-
-The developer of this project **is not responsible** for misuse.
+> **Comportamiento actual**: al seleccionar el `games_config.json` mediante diálogo, la app guarda la ruta elegida en `%APPDATA%\geforce_presence\config_path.txt`.
 
 ---
 
-## 💬 Credits
+## 🐞 Issues y Solicitudes de Mejora
 
-- [pypresence](https://qwertyquerty.github.io/pypresence/) – Discord Rich Presence integration  
-- [BeautifulSoup](https://www.crummy.com/software/BeautifulSoup/) – HTML parsing  
-- [deep-translator](https://pypi.org/project/deep-translator/) – Automatic translation  
-- [Inno Setup](https://jrsoftware.org/isinfo.php) – Installer wizard  
-- [PyInstaller](https://pyinstaller.org/) – Executable packaging  
+Si quieres que los usuarios reporten problemas o pidan mejoras, incluye instrucciones claras. Como plantilla mínima para un *issue/bug report* o *feature request* sugiere incluir:
+
+* Versión de la aplicación (si la incluyes en la release).
+* Sistema operativo (Windows 10/11) y arquitectura (x86/x64).
+* Pasos para reproducir.
+* Adjuntar logs: `%APPDATA%\geforce_presence\logs\geforce_presence.log`.
+* Adjuntar `config/games_config_merged.json` (si aplica).
+
+**Dónde recibir issues**:
+
+* Si publicas el código en GitHub: crear un repositorio y habilitar *Issues*.
+* Si no publicas el código: añade una dirección de contacto (ej. `tu@email.com`) en este README.
+
+**Plantilla rápida para reportes**:
+
+```
+Título: [bug|feature] Breve descripción
+OS: Windows 10/11
+Versión: X.Y.Z
+Pasos para reproducir:
+1. ...
+2. ...
+Logs: adjuntar geForce_presence.log
+Config: adjuntar games_config_merged.json
+Descripción detallada: ...
+```
+
+---
+
+## 🛣️ Known issues & Roadmap (priorizados)
+
+Estas son mejoras **pendientes importantes** (las incluimos aquí para que los usuarios puedan solicitarlas/seguirse como issues):
+
+1. **Seleccionar `games_config.json` debería abrir por defecto la carpeta `/config`**
+
+   * Estado: **Pendiente**
+   * Comportamiento esperado: al abrir el diálogo de selección de archivo, el diálogo debe abrirse en `%APPDATA%\geforce_presence\config` en lugar de en la carpeta raíz u otra ubicación.
+   * Nota técnica: usar `tk.filedialog.askopenfilename(initialdir=CONFIG_DIR)` o equivalente.
+
+2. **Detectar instancias en ejecución y notificar si ya está ejecutándose**
+
+   * Estado: **Pendiente**
+   * Comportamiento esperado: si el ejecutable ya está corriendo y el usuario intenta iniciar otra instancia, mostrar una notificación: **"GeForce Presence ya está en ejecución"** y evitar iniciar una segunda instancia.
+   * Nota técnica: usar `psutil` para comprobar procesos por nombre o implementar un *single instance lock* (por ejemplo, socket local o archivo lock). La notificación puede mostrarse con `plyer.notification` o con una notificación de Windows nativa.
+
+3. **Ejecutar en segundo plano con icono en la bandeja (system tray) y opción de cerrar desde allí**
+
+   * Estado: **Pendiente**
+   * Comportamiento esperado: la app se minimiza a la bandeja del sistema con un icono; el menú del icono permite abrir logs, abrir carpeta de configuración y cerrar la app.
+   * Nota técnica: considerar `pystray` + `PIL` para manejar icono en bandeja en Windows o usar `win32api`/`winsdk` para integración nativa.
+
+---
+
+## 🛠️ Notas para desarrolladores (sugerencias rápidas)
+
+* Para el punto (1) — `ConfigManager._load()` ya usa un diálogo tkinter: simplemente pasar `initialdir=str(CONFIG_DIR)` al `askopenfilename`.
+* Para el punto (2) — `AppMonitor.is_process_running()` y `AppLauncher._is_process_running_by_name()` pueden ampliarse para comprobar una *mutex* o un archivo lock; otra opción es intentar abrir un socket TCP en `localhost` con un puerto fijo y fallar si el puerto ya está en uso.
+* Para el punto (3) — `pystray` permite crear icono de bandeja multiplataforma y callbacks; implementa un `MenuItem('Cerrar', lambda: sys.exit(0))`.
+
+---
+
+## 📜 Licencia
+
+MIT License — ver `LICENSE`.
+
+## 💬 Créditos
+
+* `pypresence` — Discord Rich Presence
+* `BeautifulSoup` — análisis HTML
+* `Inno Setup` — Instalador
+* `PyInstaller` — Empaquetado de ejecutable
+
+---
+
+> Si quieres, puedo añadir un ejemplo listo para copiar/pegar en `ConfigManager._load()` (línea sugerida con `initialdir`) y un snippet para implementar la detección de instancia única.
