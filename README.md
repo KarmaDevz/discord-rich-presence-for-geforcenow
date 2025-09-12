@@ -89,38 +89,6 @@ Estructura típica:
 3. Si no hay `CONFIG_PATH_FILE` configurado, al abrir por primera vez te pedirá seleccionar el `games_config.json`.
 
 > **Comportamiento actual**: al seleccionar el `games_config.json` mediante diálogo, la app guarda la ruta elegida en `%APPDATA%\geforce_presence\config_path.txt`.
-
----
-
-## 🐞 Issues y Solicitudes de Mejora
-
-Si quieres que los usuarios reporten problemas o pidan mejoras, incluye instrucciones claras. Como plantilla mínima para un *issue/bug report* o *feature request* sugiere incluir:
-
-* Versión de la aplicación (si la incluyes en la release).
-* Sistema operativo (Windows 10/11) y arquitectura (x86/x64).
-* Pasos para reproducir.
-* Adjuntar logs: `%APPDATA%\geforce_presence\logs\geforce_presence.log`.
-* Adjuntar `config/games_config_merged.json` (si aplica).
-
-**Dónde recibir issues**:
-
-* Si publicas el código en GitHub: crear un repositorio y habilitar *Issues*.
-* Si no publicas el código: añade una dirección de contacto (ej. `tu@email.com`) en este README.
-
-**Plantilla rápida para reportes**:
-
-```
-Título: [bug|feature] Breve descripción
-OS: Windows 10/11
-Versión: X.Y.Z
-Pasos para reproducir:
-1. ...
-2. ...
-Logs: adjuntar geForce_presence.log
-Config: adjuntar games_config_merged.json
-Descripción detallada: ...
-```
-
 ---
 
 ## 🛣️ Known issues & Roadmap (priorizados)
