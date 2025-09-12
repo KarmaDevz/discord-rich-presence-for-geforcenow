@@ -91,17 +91,11 @@ Estas son mejoras **pendientes importantes** (las incluimos aquí para que los u
 
 ---
 
-## 🛠️ Notas para desarrolladores (sugerencias rápidas)
-
-* Para el punto (1) — `ConfigManager._load()` ya usa un diálogo tkinter: simplemente pasar `initialdir=str(CONFIG_DIR)` al `askopenfilename`.
-* Para el punto (2) — `AppMonitor.is_process_running()` y `AppLauncher._is_process_running_by_name()` pueden ampliarse para comprobar una *mutex* o un archivo lock; otra opción es intentar abrir un socket TCP en `localhost` con un puerto fijo y fallar si el puerto ya está en uso.
-* Para el punto (3) — `pystray` permite crear icono de bandeja multiplataforma y callbacks; implementa un `MenuItem('Cerrar', lambda: sys.exit(0))`.
-
----
-
 ## 📜 Licencia
+El programa **GeForce Presence** se distribuye únicamente en formato compilado bajo una licencia de uso binario.  
+Puedes usarlo y compartirlo con crédito al autor (**KarmaDevz**), pero no está permitido modificarlo ni usarlo con fines comerciales.
+Ver el archivo [LICENSE](LICENSE) para más detalles.
 
-MIT License — ver `LICENSE`.
 
 ## 💬 Créditos
 
