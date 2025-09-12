@@ -103,7 +103,3 @@ Ver el archivo [LICENSE](LICENSE) para más detalles.
 * `BeautifulSoup` — análisis HTML
 * `Inno Setup` — Instalador
 * `PyInstaller` — Empaquetado de ejecutable
-
----
-
-> Si quieres, puedo añadir un ejemplo listo para copiar/pegar en `ConfigManager._load()` (línea sugerida con `initialdir`) y un snippet para implementar la detección de instancia única.
