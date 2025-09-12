@@ -30,7 +30,7 @@ Herramienta que muestra la presencia (Rich Presence) en Discord de lo que estás
      ```
    * Se crean accesos directos en el **Menú Inicio** (y opcionalmente en el Escritorio).
 
-> **Nota:** El instalador está listo. Si quieres publicar el instalador en Releases o un instalador firmado, podemos añadir instrucciones.
+> **Nota:** El instalador está listo y disponible para descarga. Revisa el último release.
 
 ---
 
