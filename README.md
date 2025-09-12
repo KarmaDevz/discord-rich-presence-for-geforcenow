@@ -69,15 +69,6 @@ Estructura típica:
 }
 ```
 
-**Campos relevantes**:
-
-* `name` — nombre mostrado.
-* `client_id` — aplicación de Discord para la presencia.
-* `steam_appid` — (opcional) AppID para scraping.
-* `image`, `icon_key` — claves de imágenes usadas en Discord.
-
----
-
 ## ▶️ Uso
 
 1. Ejecuta el acceso directo creado por el instalador o ejecuta directamente:
