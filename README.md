@@ -76,30 +76,7 @@ STEAM_COOKIE=
 3. Si no hay `CONFIG_PATH_FILE` configurado, al abrir por primera vez te pedirá seleccionar el `games_config.json`.
 
 > **Comportamiento actual**: al seleccionar el `games_config.json` mediante diálogo, la app guarda la ruta elegida en `%APPDATA%\geforce_presence\config_path.txt`.
----
-
-## 🛣️ Known issues & Roadmap (priorizados)
-
-Estas son mejoras **pendientes importantes** (las incluimos aquí para que los usuarios puedan solicitarlas/seguirse como issues):
-
-1. **Seleccionar `games_config.json` debería abrir por defecto la carpeta `/config`**
-
-   * Estado: **Pendiente**
-   * Comportamiento esperado: al abrir el diálogo de selección de archivo, el diálogo debe abrirse en `%APPDATA%\geforce_presence\config` en lugar de en la carpeta raíz u otra ubicación.
-   * Nota técnica: usar `tk.filedialog.askopenfilename(initialdir=CONFIG_DIR)` o equivalente.
-
-2. **Detectar instancias en ejecución y notificar si ya está ejecutándose**
-
-   * Estado: **Pendiente**
-   * Comportamiento esperado: si el ejecutable ya está corriendo y el usuario intenta iniciar otra instancia, mostrar una notificación: **"GeForce Presence ya está en ejecución"** y evitar iniciar una segunda instancia.
-   * Nota técnica: usar `psutil` para comprobar procesos por nombre o implementar un *single instance lock* (por ejemplo, socket local o archivo lock). La notificación puede mostrarse con `plyer.notification` o con una notificación de Windows nativa.
-
-3. **Ejecutar en segundo plano con icono en la bandeja (system tray) y opción de cerrar desde allí**
-
-   * Estado: **Pendiente**
-   * Comportamiento esperado: la app se minimiza a la bandeja del sistema con un icono; el menú del icono permite abrir logs, abrir carpeta de configuración y cerrar la app.
-   * Nota técnica: considerar `pystray` + `PIL` para manejar icono en bandeja en Windows o usar `win32api`/`winsdk` para integración nativa.
-
+> 
 ---
 
 ## 📜 Licencia
