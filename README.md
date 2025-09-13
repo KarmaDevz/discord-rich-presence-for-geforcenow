@@ -27,7 +27,6 @@ Tool that shows **REAL Rich Presence** in Discord for the game you’re running 
 * Runs in the background with a tray icon and context menu to **Open Logs** or **Exit the program**.
 * Easy installation with the included **Setup**.
 * Multi-language support: currently **English (EN)** and **Spanish (ES)**.
-* External configuration via `.env` and `config/games_config_merged.json`.
 
 ---
 
