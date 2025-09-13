@@ -15,8 +15,6 @@
 
 </div>
 
-Tool that shows **REAL Rich Presence** in Discord for the game you’re running in **GeForce NOW**.
-
 ---
 
 ### Main Features
