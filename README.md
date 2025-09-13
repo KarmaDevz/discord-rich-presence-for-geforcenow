@@ -88,6 +88,6 @@ Ver el archivo [LICENSE](LICENSE) para más detalles.
 ## 💬 Créditos
 
 * `pypresence` — Discord Rich Presence
-* `BeautifulSoup` — análisis HTML
+* `Pystray` —  Menú Contextual
 * `Inno Setup` — Instalador
 * `PyInstaller` — Empaquetado de ejecutable
