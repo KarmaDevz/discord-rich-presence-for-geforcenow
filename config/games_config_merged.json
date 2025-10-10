@@ -233,7 +233,7 @@
     "Paladins": {
         "name": "Paladins",
         "steam_appid": 444090,
-        "client_id": "356887815394557952",
+        "client_id": "1402418520662479019",
         "executable_path": "paladins.exe",
         "cmsId": "100821911",
         "uuid": "a342dc5e-b260-47cc-8efc-f531ec60fdd1",
@@ -11871,7 +11871,7 @@
     },
     "Forza Horizon 5": {
         "name": "Forza Horizon 5",
-        "steam_appid": null,
+        "steam_appid": "1551360",
         "client_id": "905961880789590076",
         "executable_path": "forzahorizon5/forzahorizon5.exe",
         "cmsId": "102332411",
@@ -11939,7 +11939,7 @@
     },
     "Diablo IV": {
         "name": "Diablo IV",
-        "steam_appid": null,
+        "steam_appid": "2344520",
         "client_id": "1113966530531704943",
         "executable_path": "diablo iv/diablo iv.exe",
         "cmsId": "102348311",
@@ -45534,7 +45534,7 @@
     },
     "PAYDAY 3": {
         "name": "PAYDAY 3",
-        "steam_appid": null,
+        "steam_appid": "1272080",
         "client_id": "1153359932255654019",
         "executable_path": "win64/payday3client-win64-shipping.exe",
         "cmsId": "102427311",
@@ -47263,7 +47263,7 @@
     },
     "THE FINALS": {
         "name": "THE FINALS",
-        "steam_appid": null,
+        "steam_appid": "2073850",
         "client_id": "1182713227491147776",
         "executable_path": "win64/discovery.exe",
         "cmsId": "102322511",
@@ -48603,7 +48603,7 @@
     },
     "Nightingale": {
         "name": "Nightingale",
-        "steam_appid": null,
+        "steam_appid": "1928980",
         "client_id": "1209560200562999336",
         "executable_path": "win64/nwxclient-win64-shipping.exe",
         "cmsId": "102772194",
@@ -53379,7 +53379,7 @@
     },
     "Age of Mythology: Retold": {
         "name": "Age of Mythology: Retold",
-        "steam_appid": null,
+        "steam_appid": "1934680",
         "client_id": "1278217547724095560",
         "executable_path": "age of mythology retold/aomrt_s.exe",
         "cmsId": "102997421",
@@ -56109,8 +56109,9 @@
         "uuid": "447e8e20-ed58-41e6-aa27-49270c2285cc",
         "shortName": "left_4_dead_2",
         "appStore": "steam",
-        "client_id": "",
-        "executable_path": ""
+        "client_id": "356954277803065354",
+        "executable_path": "binl4d2_workshop_manager.exe",
+        "steam_appid": "550"
     },
     "Yarimono": {
         "name": "Yarimono",
@@ -63150,7 +63151,7 @@
     },
     "Grounded 2": {
         "name": "Grounded 2",
-        "steam_appid": null,
+        "steam_appid": "2661300",
         "client_id": "1399813841487007976",
         "executable_path": "wingdk/grounded2-wingdk-shipping.exe",
         "cmsId": "104141720",
@@ -63734,7 +63735,7 @@
     },
     "Phasmophobia": {
         "name": "Phasmophobia",
-        "steam_appid": null,
+        "steam_appid": "739630",
         "client_id": "1402418103702524046",
         "executable_path": "phasmophobia/phasmophobia.exe",
         "cmsId": "100931511",
@@ -64281,16 +64282,6 @@
         "client_id": "",
         "executable_path": "",
         "name": "Echoes of the End"
-    },
-    "World War Z": {
-        "title": "World War Z",
-        "name": "World War Z",
-        "cmsId": "100308111",
-        "uuid": "3a9876a5-df7c-454f-b14e-c69ae629e3a8",
-        "shortName": "world_war_z_gfn_pc",
-        "appStore": "steam",
-        "client_id": "",
-        "executable_path": ""
     },
     "Call of Duty®": {
         "title": "Call of Duty®",
@@ -67210,7 +67201,8 @@
         "shortName": null,
         "appStore": null,
         "client_id": "",
-        "executable_path": ""
+        "executable_path": "",
+        "steam_appid": "414340"
     },
     "Hello Neighbor 2": {
         "title": "Hello Neighbor 2",
@@ -70741,5 +70733,68 @@
         "appStore": null,
         "client_id": "",
         "executable_path": ""
+    },
+    "Cronos: The New Dawn": {
+        "name": "Cronos: The New Dawn",
+        "steam_appid": "2101960",
+        "client_id": "1413539285776339186",
+        "image": "steam",
+        "executable_path": "win64/cronos-win64-shipping.exe"
+    },
+    "Hollow Knight: Silksong": {
+        "name": "Hollow Knight: Silksong",
+        "steam_appid": "1030300",
+        "image": "steam",
+        "executable_path": "hollow knight silksong/hollow knight silksong.exe",
+        "client_id": "1413176957381771337"
+    },
+    "Borderlands 4": {
+        "name": "Borderlands 4",
+        "steam_appid": "1285190",
+        "image": "steam",
+        "executable_path": "oakgame/binaries/win64/borderlands4.exe",
+        "client_id": "1415390815056035891"
+    },
+    "Need for Speed Heat": {
+        "name": "Need for Speed Heat",
+        "steam_appid": "1222680",
+        "image": "steam",
+        "executable_path": "need for speed heat/needforspeedheat.exe",
+        "client_id": "1161771367469948949"
+    },
+    "Indiana Jones y el Gran Círculo": {
+        "name": "Indiana Jones y el Gran Círculo",
+        "steam_appid": null,
+        "image": "steam"
+    },
+    "Gears of War: Reloaded": {
+        "name": "Gears of War: Reloaded",
+        "steam_appid": "2523720",
+        "image": "steam",
+        "executable_path": "binaries_x64/gowde-steam.exe",
+        "client_id": "1410036164684939526"
+    },
+    "NVIDIA Installer Splash": {
+        "name": "NVIDIA Installer Splash",
+        "steam_appid": null,
+        "image": "steam"
+    },
+    "World War Z": {
+        "name": "World War Z",
+        "steam_appid": "699130",
+        "image": "steam",
+        "executable_path": "pc/wwzretailegs.exe",
+        "client_id": "1129504331570356244"
+    },
+    "Call of Duty": {
+        "name": "Call of Duty",
+        "steam_appid": "1938090",
+        "image": "steam",
+        "executable_path": "sp24/sp24-cod.exe",
+        "client_id": "1306357637893587014"
+    },
+    "GTA 5": {
+        "executable_path": "gears5.exe",
+        "client_id": "1402418052569759815"
     }
 }

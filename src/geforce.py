@@ -2,6 +2,7 @@
 import argparse
 import atexit
 import json
+import difflib
 import logging
 import os
 import shutil
@@ -13,9 +14,14 @@ import subprocess
 import threading
 import time
 import stat
-import socket
+import asyncio
+import inspect
 from pathlib import Path
+import tkinter as tk
+from tkinter import filedialog, messagebox
+import winreg
 
+import concurrent.futures
 import psutil
 import requests
 import browser_cookie3
@@ -28,8 +34,234 @@ from selenium import webdriver
 from selenium.common.exceptions import WebDriverException
 from selenium.webdriver.edge.options import Options
 from selenium.webdriver.edge.service import Service as EdgeService
+import pystray
+from PIL import Image, ImageDraw
+
+logger = logging.getLogger("geforce_presence")
+logger.setLevel(logging.DEBUG)
+ch = logging.StreamHandler()
+ch.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
+logger.addHandler(ch)
+LOCK_FILE = Path(tempfile.gettempdir()) / "geforce_presence.lock"
+# --- Globals para callbacks del tray ---
+PRESENCE_INSTANCE = None   # Se asigna en main() con PresenceManager
+COOKIE_MANAGER = None      # Se asigna en main() con CookieManager
+PYSTRAY_AVAILABLE = True
+_tray_icon = None
+_tray_thread = None
+_tray_stop_event = threading.Event()
+def start_tray_icon(on_quit_callback, title="GeForceNOW Presence"):
+    img_path = ASSETS_DIR / "geforce.ico"
+
+    global _tray_icon, _tray_thread, _tray_stop_event, PRESENCE_INSTANCE, COOKIE_MANAGER
+    try:
+        title = TEXTS.get('tray_title', title)
+    except Exception:
+        pass
+    if not PYSTRAY_AVAILABLE:
+        logger.info("pystray/Pillow no disponibles; no se mostrará icono en bandeja.")
+        return False
+
+    # --- callbacks del menú ---
+    def _quit_action(icon, item):
+        logger.info("Cierre pedido desde icono de bandeja.")
+        try:
+            release_lock()
+        except Exception:
+            pass
+        try:
+            icon.visible = False
+            icon.stop()
+        except Exception:
+            pass
+        try:
+            if PRESENCE_INSTANCE is not None:
+                PRESENCE_INSTANCE.close()
+        except Exception:
+            pass
+        os._exit(0)
+
+    def _open_logs(icon, item):
+        try:
+            os.startfile(str(LOG_FILE))
+        except Exception as e:
+            logger.debug(f"No se pudo abrir logs: {e}")
+
+    def _open_geforce(icon, item=None):
+        try:
+            AppLauncher.launch_geforce_now()
+        except Exception as e:
+            logger.debug(f"Error abriendo GeForce NOW: {e}")
+
+    def _obtain_cookie(icon, item):
+        try:
+            if COOKIE_MANAGER is None:
+                show_message("Error", "Cookie manager no disponible.", kind="error")
+                return
+            val = COOKIE_MANAGER.ask_and_obtain_cookie()
+            if val:
+                save_cookie_to_env(val)
+                show_message("OK", "Steam cookie guardada.", kind="info")
+            else:
+                show_message("Error", "No se pudo obtener la cookie.", kind="error")
+        except Exception as e:
+            show_message("Error", f"Fallo al obtener cookie: {e}", kind="error")
+
+    def _force_game(icon, item):
+        import tkinter as tk
+        from tkinter import simpledialog
+
+        if PRESENCE_INSTANCE is None:
+            show_message("Error", "Presencia no inicializada.", kind="error")
+            return
+
+        # --- Crear ventana raíz invisible pero registrada ---
+        root = tk.Tk()
+        root.iconbitmap(default=str(ASSETS_DIR / "geforce.ico"))
+        root.title("GeForceNOW Presence")
+        root.geometry("1x1+20000+20000")
+        root.attributes("-topmost", True)
+        root.update_idletasks()
+
+        try:
+            # --- Pedir nombre del juego ---
+            game_name = simpledialog.askstring("Forzar juego", "Nombre del juego:", parent=root)
+            if not game_name:
+                root.destroy()
+                return
+
+            gm = PRESENCE_INSTANCE.games_map or {}
+            candidates = [k for k in gm if game_name.lower() in k.lower()]
+
+            options = []
+            if candidates:
+                # coincidencias en JSON
+                for k in candidates:
+                    options.append((k, gm[k].get("client_id"), gm[k].get("executable_path")))
+            else:
+                # buscar en Discord
+                disc = PRESENCE_INSTANCE._find_discord_matches(game_name, max_candidates=5)
+                for c in disc:
+                    options.append((c["name"], c["id"], c.get("exe")))
+                    PRESENCE_INSTANCE._apply_discord_match(game_name, c)
+
+            if not options:
+                show_message("Info", "Sin coincidencias en JSON ni Discord.")
+                root.destroy()
+                return
+
+            # --- Crear ventana de selección ---
+            top = tk.Toplevel(root)
+            top.iconbitmap(default=str(ASSETS_DIR / "geforce.ico"))
+            top.title("Seleccionar juego")
+            top.attributes("-topmost", True)
+
+            tk.Label(top, text="Selecciona una coincidencia:").pack(padx=10, pady=(8, 4))
+
+            lb = tk.Listbox(top, width=80, height=min(10, len(options)))
+            for name, cid, exe in options:
+                lb.insert(tk.END, f"{name} — id={cid}")
+            lb.pack(padx=10, pady=10)
+
+            sel = {"v": None}
+            def ok():
+                if lb.curselection():
+                    idx = lb.curselection()[0]
+                    sel["v"] = options[idx]
+                    top.destroy()
+                    
+
+            def cancel():
+                sel["v"] = None
+                top.destroy()
+
+            btn_frame = tk.Frame(top)
+            tk.Button(btn_frame, text="Aceptar", command=ok).pack(side="left", padx=5)
+            tk.Button(btn_frame, text="Cancelar", command=cancel).pack(side="left")
+            btn_frame.pack(pady=(0, 10))
+
+            # Esperar hasta que el usuario cierre el diálogo
+            top.mainloop()
+
+            if not sel["v"]:
+                root.destroy()
+                return
+
+            # --- Aplicar selección ---
+            name, cid, exe = sel["v"]
+            if cid:
+                PRESENCE_INSTANCE.client_id = cid
+                PRESENCE_INSTANCE._connect_rpc(cid)
+            if exe:
+                PRESENCE_INSTANCE.launch_fake_executable(exe)
+
+            show_message("OK", f"Juego forzado: {name}", kind="info")
+            # --- Aplicar selección ---
+            name, cid, exe = sel["v"]
+            if cid:
+                PRESENCE_INSTANCE.client_id = cid
+                PRESENCE_INSTANCE._connect_rpc(cid)
+            if exe:
+                PRESENCE_INSTANCE.launch_fake_executable(exe)
+
+            show_message("OK", f"Juego forzado: {name}", kind="info")
+
+            # Guardar el modo forzado usando la misma clave que espera update_presence()
+            PRESENCE_INSTANCE.forced_game = {
+                "name": name,
+                "client_id": cid,
+                "executable_path": exe  # <<-- clave importante
+            }
+            # Evitar toggles inmediatos: sincronizar last_game con el forzado
+            try:
+                PRESENCE_INSTANCE.last_game = dict(PRESENCE_INSTANCE.forced_game)
+            except Exception:
+                pass
+
+            logger.info(f"🎮 Juego forzado activado: {name} (id={cid})")
 
 
+
+        except Exception as e:
+            show_message("Error", f"Ocurrió un error: {e}", kind="error")
+        finally:
+            try:
+                root.destroy()
+            except:
+                pass
+
+    # --- crear menú ---
+    menu = pystray.Menu(
+        pystray.MenuItem("Forzar juego...", _force_game),
+        pystray.MenuItem("Obtener cookie de Steam", _obtain_cookie),
+        pystray.MenuItem("Abrir GeForce NOW", _open_geforce),
+        pystray.MenuItem("Abrir logs", _open_logs),
+        pystray.MenuItem("Salir", _quit_action),
+    )
+
+    try:
+        icon = pystray.Icon("geforce_presence", Image.open(str(img_path)), title, menu)
+    except Exception as e:
+        logger.error(f"No se pudo crear Icon pystray: {e}")
+        return False
+
+    # doble-click (si backend lo soporta)
+    try:
+        listener = getattr(icon, "_listener", None)
+        if listener:
+            listener.on_double_click = lambda icon, item: AppLauncher.launch_geforce_now()
+    except Exception:
+        pass
+
+    def run_icon(): 
+        try: icon.run()
+        except Exception as e: logger.debug(f"Icon tray error: {e}")
+
+    _tray_icon = icon
+    _tray_thread = threading.Thread(target=run_icon, daemon=True); _tray_thread.start()
+    return True
+
+# ----------------- Helpers & resource paths -----------------
 def resource_path(*parts):
     if getattr(sys, "frozen", False):
         base = Path(getattr(sys, "_MEIPASS", Path(sys.executable).parent))
@@ -40,11 +272,16 @@ def resource_path(*parts):
 BASE_DIR = resource_path("")      
 CONFIG_DIR = resource_path("config")
 LOGS_DIR = resource_path("logs")
+LANG_DIR = resource_path("lang")
 ASSETS_DIR = resource_path("assets")
 driver_path = resource_path("tools", "msedgedriver.exe")
 LOG_FILE = LOGS_DIR / "geforce_presence.log"
 ENV_PATH = resource_path(".env")
-
+DISCORD_DETECTABLE_URL = "https://discord.com/api/v9/applications/detectable"
+DISCORD_CACHE_PATH = LOGS_DIR / "discord_apps_cache.json"
+DISCORD_CACHE_TTL = 60 * 60
+DISCORD_AUTO_APPLY_THRESHOLD = 0.88  
+DISCORD_ASK_TIMEOUT = 30  
 DEFAULT_ENV_CONTENT = """CLIENT_ID = '1095416975028650046'
 UPDATE_INTERVAL = 10
 CONFIG_PATH_FILE = ''
@@ -52,10 +289,44 @@ TEST_RICH_URL = 'https://steamcommunity.com/dev/testrichpresence'
 STEAM_COOKIE=''
 """
 
+def get_lang_from_registry(default="en"):
+    try:
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\GeForcePresence")
+        lang, _ = winreg.QueryValueEx(key, "lang")
+        winreg.CloseKey(key)
+
+        if "spanish" in lang.lower():
+            return "es"
+        elif "english" in lang.lower():
+            return "en"
+        else:
+            return default
+    except Exception:
+        return default
+
+def load_locale(lang: str = "en") -> dict:
+    path = LANG_DIR / f"{lang}.json"
+    if path.exists():
+        return json.loads(path.read_text(encoding="utf-8"))
+    return json.loads((LANG_DIR / "en.json").read_text(encoding="utf-8"))
+
+
+try:
+    LANG = get_lang_from_registry()
+    TEXTS = load_locale(LANG)
+except Exception:
+    LANG = os.getenv('GEFORCE_LANG', 'en')
+    TEXTS = load_locale(LANG)
+
+
+
+
+
 
 CONFIG_DIR.mkdir(parents=True, exist_ok=True)
 LOGS_DIR.mkdir(parents=True, exist_ok=True)
 ASSETS_DIR.mkdir(parents=True, exist_ok=True)
+LANG_DIR.mkdir(parents=True, exist_ok=True)
 
 logger = logging.getLogger('geforce_presence')
 logger.setLevel(logging.DEBUG)
@@ -100,6 +371,40 @@ except Exception:
     logger.debug("python-dotenv no disponible o .env no encontrado; usando variables de entorno del sistema")
 
 
+
+def show_message(title: str, message: str, kind: str = "info") -> None:
+    import tkinter as tk
+    from tkinter import messagebox
+    try:
+        root = tk.Tk()
+        root.iconbitmap(default=str(ASSETS_DIR / "geforce.ico"))
+        root.title("GeForceNOW Presence")
+
+        # Hacer la ventana raíz diminuta pero registrada en el sistema
+        root.geometry("1x1+20000+20000")  # la mueve fuera de la vista
+        root.attributes("-topmost", True)
+        root.update_idletasks()
+
+        # Mostrar el mensaje
+        if kind == "info":
+            messagebox.showinfo(title, message, parent=root)
+        elif kind == "warning":
+            messagebox.showwarning(title, message, parent=root)
+        elif kind == "error":
+            messagebox.showerror(title, message, parent=root)
+        elif kind == "askyesno":
+            return messagebox.askyesno(title, message, parent=root)
+    except Exception as e:
+        logger.error(f"Error mostrando mensaje: {e}")
+    finally:
+        try:
+            root.destroy()
+        except:
+            pass
+
+
+
+
 def ensure_driver_executable(src_path: Path) -> str:
     try:
         if not src_path.exists():
@@ -117,7 +422,7 @@ def ensure_driver_executable(src_path: Path) -> str:
     except Exception as e:
         logger.error(f"Error preparando msedgedriver: {e}")
         return str(src_path)
-    
+
 driver_exec = ensure_driver_executable(Path(driver_path))
 service = EdgeService(executable_path=str(driver_exec))
 TEST_RICH_URL = os.getenv("TEST_RICH_URL", "").strip()
@@ -128,6 +433,38 @@ CONFIG_PATH_FILE = CONFIG_DIR / "config_path.txt"
 
 UPDATE_INTERVAL = int(os.getenv("UPDATE_INTERVAL", "10"))
 
+
+def acquire_lock() -> bool:
+    if LOCK_FILE.exists():
+        try:
+            pid = int(LOCK_FILE.read_text().strip())
+
+            if psutil.pid_exists(pid):
+                logger.info(f"Ya existe otra instancia (PID {pid})")
+                return False
+            else:
+
+                LOCK_FILE.unlink()
+                logger.debug("Lock huérfano eliminado.")
+        except Exception:
+
+            try:
+                LOCK_FILE.unlink()
+            except Exception:
+                pass
+
+    LOCK_FILE.write_text(str(os.getpid()))
+    atexit.register(release_lock)
+    return True
+
+def release_lock():
+    try:
+        if LOCK_FILE.exists():
+            LOCK_FILE.unlink()
+    except Exception:
+        pass
+
+# ----------------- JSON utils -----------------
 def safe_json_load(path: Path) -> Optional[Dict]:
     try:
         with path.open("r", encoding="utf-8") as f:
@@ -153,6 +490,84 @@ def save_json(obj, path: Path):
     except Exception as e:
         logger.error(f"Error guardando JSON {path}: {e}")
 
+# ----------------- Notifications -----------------
+def notify_background(message=None, title=None, timeout=5):
+    if title is None:
+        title = TEXTS.get("notify_title", "GeForce NOW Presence")
+    if message is None:
+        message = TEXTS.get("notify_background", "The program is running in the background")
+    """
+    No system notifications (pystray-only). Logs the background status.
+    """
+    logger.info(f"{title}: {message} (no notification shown, tray-only)")
+
+
+# ----------------- Instance detection -----------------
+def find_other_instance() -> Optional[psutil.Process]:
+    """
+    Detecta si hay otra instancia de este mismo script/exe corriendo.
+    Retorna proceso encontrado o None.
+    """
+    try:
+        current_pid = os.getpid()
+        current_file = Path(sys.argv[0]).resolve()
+
+        for proc in psutil.process_iter(['pid', 'exe', 'cmdline']):
+            if proc.info['pid'] == current_pid:
+                continue
+
+            cmdline = proc.info.get('cmdline') or []
+            exe = proc.info.get('exe')
+
+
+            if exe:
+                try:
+                    if Path(exe).resolve() == current_file:
+                        return proc
+                except Exception:
+                    pass
+
+
+            for arg in cmdline:
+                try:
+                    if Path(arg).resolve() == current_file:
+                        return proc
+                except Exception:
+                    continue
+    except Exception as e:
+        logger.debug(f"Error buscando otras instancias: {e}")
+    return None
+
+# ----------------- Tray icon management -----------------
+_tray_icon = None
+_tray_thread = None
+_tray_stop_event = threading.Event()
+
+def _create_default_icon_image(size=64):
+
+    img = Image.new('RGBA', (size, size), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+
+    r = size // 2
+    d.ellipse((4, 4, size-4, size-4), fill=(20, 100, 200, 255))
+    d.text((size*0.28, size*0.18), "G", fill=(255,255,255,255))
+    return img
+
+
+def stop_tray_icon():
+    global _tray_icon, _tray_thread
+    try:
+        if _tray_icon:
+            try:
+                _tray_icon.stop()
+            except Exception:
+                pass
+            _tray_icon = None
+    except Exception:
+        pass
+
+
+# ----------------- AppMonitor, ConfigManager, CookieManager, etc. (copiado y adaptado) -----------------
 class AppMonitor:
     @staticmethod
     def is_process_running(name: str) -> bool:
@@ -192,6 +607,7 @@ class ConfigManager:
         self._load()
 
     def _load(self):
+
         if self.config_path_file.exists():
             try:
                 p = Path(self.config_path_file.read_text(encoding="utf-8").strip())
@@ -209,18 +625,36 @@ class ConfigManager:
             except Exception as e:
                 logger.warning(f"⚠️ No se pudo leer config_path_file: {e}")
 
+
         try:
-            import tkinter as tk
-            from tkinter import filedialog
             root = tk.Tk()
             root.withdraw()
             logger.info("📁 Selecciona tu archivo games_config.json (dialog)...")
+            initialdir = str(CONFIG_DIR) if CONFIG_DIR.exists() else str(Path.home())
+            initialfile = "games_config.json"
+
+            suggested = Path(initialdir) / initialfile
+            if suggested.exists():
+                p = suggested
+                self.games_config_path = p
+                self.games_config = safe_json_load(p) or {}
+                try:
+                    self.config_path_file.write_text(str(p), encoding="utf-8")
+                except Exception as e:
+                    logger.warning(f"⚠️ No se pudo escribir config_path_file: {e}")
+                logger.info(f"✅ Configuración guardada: {self.config_path_file}")
+                self._log_games_summary()
+                return
+
             p_str = filedialog.askopenfilename(
-                title="Selecciona el archivo games_config.json",
-                filetypes=[("JSON Files", "*.json")]
+                title="Selecciona el archivo games_config_merged.json",
+                filetypes=[("JSON Files", "*.json")],
+                initialdir=CONFIG_DIR,
+                initialfile="games_config_merged.json"
             )
             if not p_str:
                 logger.error("❌ No se seleccionó ningún archivo.")
+                show_message("Error", TEXTS.get('error_no_config', 'No configuration file found. Please select one.'), kind="error")
                 return
             p = Path(p_str)
             self.games_config_path = p
@@ -273,10 +707,55 @@ class CookieManager:
         except Exception as e:
             logger.debug(f"browser_cookie3 fallo: {e}")
         return None
+    
+    def ask_get_cookie(self) -> bool:
+        """Pregunta al usuario si quiere obtener la cookie de Steam."""
+        res =show_message("Cookie", TEXTS.get('ask_cookie', 'The program will try to obtain your Steam cookie using Microsoft Edge. Make sure you are logged in to Steam in Edge.\n\nDo you want to continue?'), kind="askyesno")
+        return res
+    
+    def close_edge_processes(self):
+        """Cierra todos los procesos de Microsoft Edge."""
+        import psutil
+        closed = 0
+        for proc in psutil.process_iter(['pid', 'name']):
+            try:
+                if proc.info['name'] and "msedge.exe" in proc.info['name'].lower():
+                    proc.terminate()
+                    closed += 1
+            except Exception:
+                continue
+        if closed:
+            logger.info(f"🔒 {closed} procesos de Edge terminados.")
+        else:
+            logger.debug("No había procesos de Edge en ejecución.")
 
     def get_cookie_with_selenium(self, headless: bool = False, profile_dir: str = "Default") -> Optional[str]:
         try:
+            res = self.ask_get_cookie()
+            if not res:
+                logger.info("⏭️ Usuario eligió no obtener cookie de Steam.")
+                return None
+
+            import psutil
+            edge_running = any(
+                (p.info['name'] and "msedge.exe" in p.info['name'].lower())
+                for p in psutil.process_iter(['name'])
+            )
+
+            if edge_running:
+                res = show_message("Edge abierto", TEXTS.get('edge_open_confirm'), kind="askyesno")
+
+                if not res:
+                    logger.info("⏭️ Usuario canceló la obtención de cookie porque Edge estaba abierto.")
+                    return None
+
+                self.close_edge_processes()
+                time.sleep(2)
+
+
             logger.info("🧩 Obteniendo cookie de Steam con Selenium (Edge)...")
+            ...
+
             localapp = os.getenv("LOCALAPPDATA", "")
             user_data_dir = str(Path(localapp) / "Microsoft" / "Edge" / "User Data")
             if not Path(user_data_dir).exists():
@@ -309,6 +788,8 @@ class CookieManager:
             logger.error(f"⚠️ Error inesperado obteniendo cookie con Selenium: {e}")
         return None
 
+
+
     def get_steam_cookie(self) -> Optional[str]:
         if self.env_cookie:
             logger.info("🧩 Validando cookie desde .env...")
@@ -334,37 +815,19 @@ class CookieManager:
         Si acepta, intenta primero browser_cookie3, luego Selenium.
         """
         try:
-            should = False
-            # Si hay terminal interactiva:
-            if sys.stdin and sys.stdin.isatty():
-                try:
-                    res = input("La cookie de Steam es inválida o no existe. ¿Deseas intentar obtenerla ahora con Selenium/Edge? [y/N]: ").strip().lower()
-                    should = res == "y" or res == "s"
-                except Exception:
-                    should = False
-            else:
-                # Intentar GUI simple con tkinter
-                try:
-                    import tkinter as tk
-                    from tkinter import messagebox
-                    root = tk.Tk()
-                    root.withdraw()
-                    should = messagebox.askyesno("Cookie inválida", "La cookie de Steam es inválida o no existe. ¿Deseas intentar obtenerla ahora?")
-                    root.destroy()
-                except Exception:
-                    should = False
+            should = show_message("Cookie", TEXTS.get('ask_cookie', 'The program will try to obtain your Steam cookie using Microsoft Edge. Make sure you are logged in to Steam in Edge.\n\nDo you want to continue?'), kind="askyesno")
 
             if not should:
                 logger.info("No se obtuvo cookie de Steam de forma interactiva.")
                 return None
 
-            # Intentos automáticos
+
             c = self.get_cookie_from_edge_profile()
             if c and self.validar_cookie(c):
                 save_cookie_to_env(c)
                 return c
 
-            # intenta con selenium (abrirá Edge con tu perfil; pide interacción)
+
             c2 = self.get_cookie_with_selenium(headless=False)
             if c2 and self.validar_cookie(c2):
                 save_cookie_to_env(c2)
@@ -376,6 +839,7 @@ class CookieManager:
             logger.error(f"Error en ask_and_obtain_cookie: {e}")
             return None
 
+# ----------------- AppLauncher, SteamScraper, PresenceManager (sin cambios funcionales importantes) -----------------
 class AppLauncher:
     @staticmethod
     def find_geforce_now() -> Optional[str]:
@@ -385,6 +849,7 @@ class AppLauncher:
         for p in possible:
             if p.exists():
                 return str(p)
+            
         return None
 
     @staticmethod
@@ -408,8 +873,7 @@ class AppLauncher:
             logger.info("🚀 Iniciando GeForce NOW...")
             subprocess.Popen([path])
         else:
-            logger.warning("⚠️ No se encontró GeForce NOW. Inícialo manualmente.")
-
+            show_message("Error", TEXTS.get('geforce_not_found', 'GeForce NOW not found in the default installation path.'), kind="error")
     @staticmethod
     def find_discord() -> Optional[str]:
         p = Path(os.getenv("LOCALAPPDATA", "")) / "Discord" / "Update.exe"
@@ -479,64 +943,6 @@ class SteamScraper:
             logger.error(f"⚠️ Error scraping Steam: {e}")
             return None
 
-def fetch_eos_presence(eos_presence_url: str = "http://localhost:5000/presence", timeout: float = 2.0):
-    """Devuelve el JSON del endpoint /presence o None"""
-    try:
-        r = requests.get(eos_presence_url, timeout=timeout)
-        if r.status_code != 200:
-            logger.debug(f"EOS presence HTTP {r.status_code} from {eos_presence_url}")
-            return None
-        data = r.json()
-        if not data or "error" in data:
-            logger.debug(f"EOS presence empty or error: {data}")
-            return None
-        return data
-    except Exception as e:
-        logger.debug(f"No se pudo obtener EOS presence: {e}")
-        return None
-
-def fetch_eos_presence_via_rest(eos_token_url="http://localhost:5000/token"):
-    """Obtiene el rich presence real usando la Web API de Epic si tienes un accessToken."""
-    token_info = fetch_eos_token(eos_token_url)
-    if not token_info or "accessToken" not in token_info or "accountId" not in token_info:
-        logger.debug("No hay token o accountId en token_info.")
-        return None
-
-    access_token = token_info["accessToken"]
-    account_id = token_info["accountId"]
-    print("Account ID:", account_id)
-    headers = {"Authorization": f"bearer {access_token}"}
-
-    # URL hipotética; busca el endpoint real según tus permisos/pipeline en Epic Developer
-    # Ejemplo genérico:
-    presence_api_url = f"https://api.epicgames.dev/presence/v1/{account_id}"
-    
-    try:
-        r = requests.get(presence_api_url, headers=headers, timeout=3)
-        if r.status_code != 200:
-            logger.debug(f"Epic presence API HTTP {r.status_code}")
-            return None
-        return r.json()
-    except Exception as e:
-        logger.debug(f"Error en Epic presence API: {e}")
-        return None
-
-def fetch_eos_token(eos_token_url: str = "http://localhost:5000/token", timeout: float = 2.0):
-    """Devuelve el JSON del endpoint /token (accountId, accessToken, expiresAt) o None"""
-    try:
-        r = requests.get(eos_token_url, timeout=timeout)
-        if r.status_code != 200:
-            logger.debug(f"EOS token HTTP {r.status_code} from {eos_token_url}")
-            return None
-        data = r.json()
-        if not data or "error" in data:
-            logger.debug(f"EOS token empty or error: {data}")
-            return None
-        return data
-    except Exception as e:
-        logger.debug(f"No se pudo obtener EOS token: {e}")
-        return None
-
 def find_steam_appid_by_name(game_name: str) -> Optional[str]:
     try:
         url = f"https://steamcommunity.com/actions/SearchApps/{game_name}"
@@ -544,7 +950,7 @@ def find_steam_appid_by_name(game_name: str) -> Optional[str]:
         if resp.status_code == 200:
             data = resp.json()
             if data and isinstance(data, list):
-                # Busca coincidencia exacta o la primera
+
                 for app in data:
                     if app.get("name", "").lower() == game_name.lower():
                         return str(app.get("appid"))
@@ -555,26 +961,11 @@ def find_steam_appid_by_name(game_name: str) -> Optional[str]:
     return None
 
 class PresenceManager:
-    def __init__(self, client_id: str, games_map: Dict, cookie_manager: CookieManager, test_rich_url: str,
-             update_interval: int = 10, keep_alive: bool = False,
-             eos_presence_url: str = "http://localhost:5000/presence",
-             eos_token_url: str = "http://localhost:5000/token"):
-        atexit.register(self.close_fake_executable)
+    def __init__(self, client_id: str, games_map: dict, cookie_manager, test_rich_url: str,
+                 update_interval: int = 10, keep_alive: bool = False):
+        import atexit, signal, sys
 
-        # registrar cleanup en señales
-        def _cleanup_and_exit(signum, frame):
-            try:
-                self.close_fake_executable()
-            except Exception:
-                pass
-            sys.exit(0)
-
-        signal.signal(signal.SIGTERM, _cleanup_and_exit)
-        signal.signal(signal.SIGINT, _cleanup_and_exit)
-        self.eos_presence_url = eos_presence_url
-        self.eos_token_url = eos_token_url
-
-        self.client_id_default = client_id
+        self.client_id = client_id
         self.games_map = games_map
         self.cookie_manager = cookie_manager
         self.test_rich_url = test_rich_url
@@ -582,40 +973,28 @@ class PresenceManager:
         self.keep_alive = keep_alive
         self.fake_proc = None
         self.fake_exec_path = None
+        self.last_log_message = None
+        self.rpc = Presence(self.client_id)
+        self._connect_rpc()
 
-        cookie = self.cookie_manager.get_steam_cookie()
-        if not cookie:
-            try:
-                any_steam = any(
-                    (v.get("appStore") or v.get("appStore", "")).strip().lower() == "steam"
-                    or (v.get("steam_appid") is not None)
-                    for v in (self.games_map or {}).values()
-                )
-            except Exception:
-                any_steam = False
+        self.scraper = SteamScraper(self.cookie_manager.get_steam_cookie(), test_rich_url)
+        self.last_game = None
+        self.forced_game = None
 
-        if any_steam:
-            cookie = self.cookie_manager.ask_and_obtain_cookie()
-            self.scraper = SteamScraper(cookie, test_rich_url)
-            if not self.client_id_default:
-                raise RuntimeError("CLIENT_ID no configurado en .env")
-            self.rpc = Presence(self.client_id_default)
-            self._connect_rpc(self.client_id_default)
-            self.last_game = None
-            self.last_log_message = None
 
-            if self.keep_alive:
-                self._start_keep_alive_thread()
+        atexit.register(self.close)
+        signal.signal(signal.SIGTERM, lambda s, f: sys.exit(0))
+        signal.signal(signal.SIGINT, lambda s, f: sys.exit(0))
 
-    def is_same_game(self, g1: Optional[dict], g2: Optional[dict]) -> bool:
-        if g1 is None and g2 is None:
-            return True
-        if (g1 is None) != (g2 is None):
-            return False
-        for k in ("client_id", "executable_path", "name"):
-            if g1.get(k) != g2.get(k):
-                return False
-        return True
+    def _connect_rpc(self, client_id: Optional[str] = None):
+        try:
+            client_id = client_id or self.client_id
+            self.rpc = Presence(client_id)
+            self.rpc.connect()
+            logger.info(f"✅ Conectado a Discord RPC con client_id={client_id}")
+        except Exception as e:
+            logger.error(f"❌ Error conectando a Discord RPC: {e}")
+            self.rpc = None
 
     def wait_for_file_release(self, path: Path, timeout: float = 3.0) -> bool:
         start = time.time()
@@ -654,8 +1033,10 @@ class PresenceManager:
                         proc.kill()
                     closed_any = True
             if closed_any:
+                
                 time.sleep(0.35)
                 logger.info("✅ Ejecutable falso cerrado")
+                
         except Exception as e:
             logger.error(f"❌ Error cerrando ejecutable falso: {e}")
         finally:
@@ -688,137 +1069,217 @@ class PresenceManager:
         except Exception as e:
             logger.error(f"❌ Error creando/ejecutando ejecutable falso: {e}")
 
-    def update_presence(self, game_info: Optional[dict]):
-        
-        current_game = game_info or None
-        game_changed = not self.is_same_game(self.last_game, current_game)
-        
-        status = None
-        
-        if current_game.get("appStore", "").lower() == "CUSTOM":
-            logger.info("Intentando obtener presencia de EOS para juego Epic...")
-            try:
-                r = requests.get("http://localhost:5000/presence", timeout=3)
-                if r.status_code == 200:
-                    data = r.json()
-                    pres = data.get("presence", {})
-                    rich = pres.get("richText") or pres.get("RichText")
-                    if rich:
-                        status = rich 
-                        self.log_once(f"🔁 Usando EOS Presence: {status}")
-                        current_game["image"] = current_game.get("image", "epic")
-            except Exception as e:
-                logger.error(f"No se pudo obtener EOS presence: {e}")
-        if current_game and current_game.get("name") is None:
-            self.log_once("🛑 GeForce NOW está cerrado")
-            self.close_fake_executable()
+    def _fetch_discord_apps_cached(self):
+        """Devuelve la lista de apps desde caché o descarga si expiró."""
+        try:
+            if DISCORD_CACHE_PATH.exists():
+                data = safe_json_load(DISCORD_CACHE_PATH)
+                if data and isinstance(data, dict):
+                    ts = data.get("_ts", 0)
+                    if time.time() - ts < DISCORD_CACHE_TTL:
+                        return data.get("apps", [])
+
+            resp = requests.get(DISCORD_DETECTABLE_URL, timeout=15)
+            if resp.status_code == 200:
+                apps = resp.json()
+                to_save = {"_ts": int(time.time()), "apps": apps}
+                try:
+                    save_json(to_save, DISCORD_CACHE_PATH)
+                except Exception:
+                    pass
+                return apps
+        except Exception as e:
+            logger.debug(f"Error obteniendo detectable de Discord: {e}")
+        return []
+
+    def _find_discord_matches(self, game_name: str, max_candidates: int = 5):
+        """Busca coincidencias por name o aliases y devuelve lista ordenada (name, id, exe, score)."""
+        apps = self._fetch_discord_apps_cached()
+        candidates = []
+        gnl = (game_name or "").lower()
+        for app in apps:
+            name = app.get("name", "") or ""
+            aliases = app.get("aliases", []) or []
+            score_name = difflib.SequenceMatcher(None, gnl, name.lower()).ratio()
+            # score por alias más alta
+            score_alias = 0.0
+            for a in aliases:
+                s = difflib.SequenceMatcher(None, gnl, (a or "").lower()).ratio()
+                if s > score_alias:
+                    score_alias = s
+            score = max(score_name, score_alias)
+            if score > 0.35:  # filtro mínimo para reducir ruido
+                # buscar ejecutable win32 si existe
+                exe = None
+                for e in app.get("executables", []) or []:
+                    if e.get("os") == "win32" and e.get("name"):
+                        exe = e.get("name")
+                        break
+                candidates.append({
+                    "name": name,
+                    "id": app.get("id"),
+                    "exe": exe,
+                    "score": score,
+                    "aliases": aliases
+                })
+        candidates.sort(key=lambda x: x["score"], reverse=True)
+        return candidates[:max_candidates]
+
+    def _apply_discord_match(self, game_key: str, match: dict):
+        """Aplica (guarda) la coincidencia al games_config.json y al self.games_map en memoria."""
+        try:
+            if not match or "id" not in match:
+                return False
+            config_path = CONFIG_PATH_FILE.read_text(encoding="utf-8").strip()
+            config_path = Path(config_path)
+            games_config = safe_json_load(config_path) or {}
+
+            entry = games_config.get(game_key, {}) or {}
+
+            if match.get("exe"):
+                entry.setdefault("executable_path", match["exe"])
+            if match.get("id"):
+                entry.setdefault("client_id", match["id"])
+            games_config[game_key] = entry
+            save_json(games_config, config_path)
+            # actualizar en memoria
+            self.games_map = games_config
+            logger.info(f"✅ Discord match aplicado para '{game_key}': id={match.get('id')}, exe={match.get('exe')}")
+            return True
+        except Exception as e:
+            logger.error(f"❌ Error aplicando discord match: {e}")
+            return False
+
+    def _show_match_dialog(self, game_key: str, candidates: list, timeout: int = DISCORD_ASK_TIMEOUT):
+        """
+        Muestra una ventana tkinter con las mejores coincidencias. Devuelve match seleccionado o None.
+        Esta función corre en el hilo GUI (abre una ventana temporal).
+        """
+        selected = {"value": None}
+        try:
+            root = tk.Tk()
+            root.withdraw()
+            top = tk.Toplevel()
+            top.title(f"Coincidencia Discord: {game_key}")
+            top.attributes("-topmost", True)
+            # Label
+            tk.Label(top, text=f"Se encontró un nuevo juego: '{game_key}'.\nSelecciona la coincidencia correcta (si alguna):", justify="left").pack(padx=10, pady=6)
+            lb = tk.Listbox(top, width=80, height=min(8, max(3, len(candidates))))
+            lb.pack(padx=10, pady=(0,6))
+            # llenar listbox con nombre (score) [exe]
+            for c in candidates:
+                exe = c.get("exe") or ""
+                lb.insert(tk.END, f"{c['name']}  ({c['score']:.2f})  [{exe}]  id={c.get('id') or '—'}")
+            # botones
+            def on_confirm():
+                sel = lb.curselection()
+                if sel:
+                    idx = sel[0]
+                    selected["value"] = candidates[idx]
+                top.destroy()
+            def on_ignore():
+                top.destroy()
+            btn_frame = tk.Frame(top)
+            tk.Button(btn_frame, text="Confirmar", command=on_confirm).pack(side="left", padx=6)
+            tk.Button(btn_frame, text="Ignorar", command=on_ignore).pack(side="left")
+            btn_frame.pack(pady=(0,10))
+
+            def on_timeout():
+                try:
+                    top.destroy()
+                except Exception:
+                    pass
+            top.after(int(timeout * 1000), on_timeout)
+
+            top.protocol("WM_DELETE_WINDOW", on_ignore)
+            root.mainloop()
+        except Exception as e:
+            logger.debug(f"Error en dialog match: {e}")
+        return selected["value"]
+
+    def _ask_discord_match_for_new_game(self, game_key: str):
+        """
+        Hilo que busca coincidencias en Discord y aplica/consulta:
+        - Si top score >= DISCORD_AUTO_APPLY_THRESHOLD -> aplica sin preguntar
+        - Si hay candidatos pero score < threshold -> pregunta al usuario mediante ventana
+        - Si no hay candidatos -> no hace nada
+        """
+        try:
+            candidates = self._find_discord_matches(game_key, max_candidates=6)
+            if not candidates:
+                logger.info(f"ℹ️ No se encontraron matches en Discord para '{game_key}'")
+                return
+            top = candidates[0]
+            logger.debug(f"Discord top candidate for '{game_key}': {top.get('name')} (score={top.get('score'):.2f})")
+            # auto apply si muy seguro
+            if top.get("score", 0) >= DISCORD_AUTO_APPLY_THRESHOLD:
+                applied = self._apply_discord_match(game_key, top)
+                if applied:
+                    logger.info(f"🔁 Aplicado automaticamente match Discord: {top.get('name')} (score {top.get('score'):.2f})")
+                return
+
+            sel = self._show_match_dialog(game_key, candidates, timeout=DISCORD_ASK_TIMEOUT)
+            if sel:
+                self._apply_discord_match(game_key, sel)
+            else:
+                logger.info(f"ℹ️ Usuario ignoró/timeout match Discord para '{game_key}'")
+        except Exception as e:
+            logger.debug(f"Error en ask_discord_match_for_new_game: {e}")
+
+    def run_loop(self):
+        logger.info("🟢 Iniciando monitor de presencia...")
+        try:
+            while True:
+                if not self.is_geforce_running():
+                    if getattr(self, "forced_game", None):
+                        logger.info("Modo forzado desactivado ...")
+                        self.forced_game = None
+                    if self.last_game is not None:
+                        logger.info("⚠️ GeForce NOW no está en ejecución — limpiando presencia.")
+                        try:
+                            self.rpc.clear()
+                        except Exception:
+                            pass
+                        self.close_fake_executable()
+                        self.last_game = None
+                        self.last_log_message = None
+                    time.sleep(self.update_interval)
+                    continue
+
+                game = self.find_active_game()
+                self.update_presence(game)
+                time.sleep(self.update_interval)
+
+        except KeyboardInterrupt:
+            logger.info("🔴 Detenido por usuario")
             try:
                 self.rpc.clear()
             except Exception:
                 pass
-            self.last_game = None
-            return
-        
-            # ⚡ Opción B: intentar relanzar automáticamente GeForce NOW
-            # AppLauncher.launch_geforce_now()
-
-        if current_game and current_game.get("name") == "":
-            self.log_once("🔄 En el menú")
-            rn = "geforce now"
-            current_game["name"] = "GeForce NOW"
-            current_game["image"] = "lib"
-
-        if game_changed:
+            try:
+                self.rpc.close()
+                logger.info("🔴 Discord RPC cerrado correctamente.")
+            except Exception:
+                pass
             self.close_fake_executable()
-            if current_game and current_game.get("executable_path"):
-                self.launch_fake_executable(current_game["executable_path"])
+            sys.exit(0)
 
-        if not current_game:
-            if self.last_game is not None:
-                try:
-                    self.rpc.clear()
-                except Exception:
-                    pass
-                self.last_game = None
-            return
-
-        client_id = current_game.get("client_id", self.client_id_default)
-        if getattr(self.rpc, "client_id", None) != client_id:
+        except Exception as e:
+            if str(e) not in (
+                "'NoneType' object has no attribute 'get'",
+                "cannot access local variable 'title' where it is not associated with a value",
+            ):
+                logger.error(f"❌ Error inesperado en el loop principal: {e}")
             try:
                 self.rpc.clear()
+            except Exception:
+                pass
+            try:
                 self.rpc.close()
             except Exception:
                 pass
-            if client_id:
-                self._connect_rpc(client_id)
-                #self.log_once(f"🔁 Cambiado client_id a {client_id}")
-
-        if status is None:
-            status = self.scraper.get_rich_presence() if current_game.get('steam_appid') else None
-
-        has_custom = current_game.get("client_id") and current_game.get("client_id") != self.client_id_default
-        if has_custom:
-            self.log_once(f"🔄 iniciando presencia para: {current_game.get('name', 'Desconocido')}")
-        else:
-            if current_game.get("name") != "GeForce NOW":
-                self.log_once(f"🔄 Usando client_id por defecto para: {current_game.get('name')}")
-        def split_status(s):
-            for sep in ["|", " - ", ":", "›", ">"]:
-                if sep in s:
-                    a, b = s.split(sep, 1)
-                    return a.strip(), b.strip()
-            return s.strip(), None
-
-        details, state = (split_status(status) if status else (None, None))
-        if not details and not has_custom:
-            rn = current_game.get('name', '').strip().lower()
-            details = "Buscando qué jugar" if rn in ["geforce now", "Games", ""] else f"Jugando a {current_game.get('name')}"
-            if rn in ["geforce now", "Games", ""]:
-                current_game["image"] = "lib"
-
-        presence_data = {
-            "details": details,
-            "state": state,
-            "large_image": current_game.get('image', 'steam'),
-            "large_text": current_game.get('name'),
-            "small_image": current_game.get("icon_key") if current_game.get("icon_key") else None
-        }
-        try:
-            self.rpc.update(**{k: v for k, v in presence_data.items() if v})
-        except Exception as e:
-            logger.error(f"❌ Error actualizando Presence: {e}")
-            if "pipe was closed" in str(e).lower():
-                try:
-                    self._connect_rpc(client_id) 
-                    logger.info("🔁 Reconectado con Discord RPC tras cierre de pipe")
-                except Exception as e2:
-                    logger.error(f"❌ Falló la reconexión a Discord RPC: {e2}")
-
-
-        self.last_game = dict(current_game) if isinstance(current_game, dict) else current_game
-
-    def is_geforce_running(self) -> bool:
-        try:
-            for proc in psutil.process_iter(attrs=['name']):
-                name = (proc.info.get('name') or "").lower()
-                if "geforcenow" in name:
-                    return True
-        except Exception as e:
-            logger.debug(f"Error comprobando procesos: {e}")
-        return False
-
-    def _connect_rpc(self, client_id):
-        try:
-            self.rpc = Presence(client_id)
-            self.rpc.connect()
-            logger.info("✅ Discord RPC conectado correctamente")
-        except Exception as e:
-            logger.error(f"❌ Error al conectar con Discord ({client_id}): {e}")
-
-    def log_once(self, msg, level="info"):
-        if msg != self.last_log_message:
-            getattr(logger, level)(msg)
-            self.last_log_message = msg
+            self.close_fake_executable()
+            sys.exit(1)
 
     def find_active_game(self) -> Optional[dict]:
         try:
@@ -843,11 +1304,18 @@ class PresenceManager:
                     setattr(self, "_last_window_title", title)
                 if title == None:
                     self.log_once("⚠️ GeForce NOW no está abierto")
-                logger.debug(f"Juego activo detectado: {title}")
+                #if title and title.strip() == "GeForce NOW":
+                    #return {
+                    #    "name": "GeForce NOW",
+                    #   "client_id": "1421154726023532544",
+                    #  "executable_path": "ea sports fc 26/fc26.exe",
+                    #   "image": "geforce_default"
+                    #}
+
                 clean = re.sub(r'\s*(en|on|via)?\s*GeForce\s*NOW.*$', '', title, flags=re.IGNORECASE).strip()
                 clean = re.sub(r'[®™]', '', clean).strip()
-                if clean.lower() not in ["geforce now", "games", ""]:
-                    logger.debug(f"Juego limpio: {clean}")
+                #if clean.lower() not in ["geforce now", "games", ""]:
+                #    logger.debug(f"|: {clean}")
 
                 
                 last_clean = getattr(self, "_last_clean_title", None)
@@ -872,7 +1340,6 @@ class PresenceManager:
                 new_game = {
                     "name": clean,
                     "steam_appid": appid,
-                    "client_id": self.client_id_default,
                     "image": "steam"
                 }
                 self.games_map[clean] = new_game
@@ -881,79 +1348,197 @@ class PresenceManager:
                 games_config = safe_json_load(config_path) or {}
                 games_config[clean] = new_game
                 save_json(games_config, config_path)
+                updated = self.games_map.get(clean)
+                if updated:
+                    new_game = updated
                 logger.info(f"🆕 Juego agregado a config: {clean} (AppID: {appid})")
                 self.games_map = games_config
+
+                try:
+                    threading.Thread(
+                        target=self._ask_discord_match_for_new_game,
+                        args=(clean,),
+                        daemon=True
+                    ).start()
+                except Exception as e:
+                    logger.debug(f"no se pudo iniciar hilo de discord-match: {e}")
                 return new_game
-            return {'name': title, 'image': 'geforce_default', 'client_id': self.client_id_default}
+
+            
+            return {'name': title, 'image': 'geforce_default', 'client_id': self.client_id}
         except Exception as e:
             if str(e) == "cannot access local variable 'title' where it is not associated with a value":
                 self.log_once(f"⚠️ GeForce NOW está cerrado")
             else:
                 logger.error(f"⚠️ Error detectando juego activo: {e}")
 
-    def _start_keep_alive_thread(self):
-        def keepalive():
-            try:
-                import pyautogui #type: ignore
-            except Exception:
-                logger.warning("pyautogui no disponible; keep-alive deshabilitado.")
-                return
-            logger.info("🔔 Keep-alive activado (movimientos de 1 px cada 5 min).")
-            while True:
-                try:
-                    pyautogui.moveRel(1, 0, duration=0.1)
-                    pyautogui.moveRel(-1, 0, duration=0.1)
-                    time.sleep(300)
-                except Exception as e:
-                    self.log_once("⚠️ pyautogui alcanzó el limite de la pantalla")
+    def log_once(self, msg, level="info"):
+        if msg != self.last_log_message:
+            getattr(logger, level)(msg)
+            self.last_log_message = msg
 
-
-        t = threading.Thread(target=keepalive, daemon=True)
-        t.start()
-
-    def run_loop(self):
-        logger.info("🟢 Iniciando monitor de presencia...")
+    def is_geforce_running(self) -> bool:
         try:
-            while True:
-                time.sleep(self.update_interval)
-                if not self.is_geforce_running():
-                    if self.last_game is not None:
-                        logger.info("⚠️ GeForce NOW no está en ejecución — limpiando presencia y estado local.")
-                        try:
-                            self.rpc.clear()
-                        except Exception:
-                            pass
-                        self.close_fake_executable()
-                        self.last_game = None
-                        self.last_log_message = None
-                    time.sleep(self.update_interval)
-                    continue
-
-                game = self.find_active_game()
-                self.update_presence(game)
-                time.sleep(self.update_interval)
-
-        except KeyboardInterrupt:
-            logger.info("🔴 Detenido por usuario")
+            for proc in psutil.process_iter(attrs=['name']):
+                name = (proc.info.get('name') or "").lower()
+                if "geforcenow" in name:
+                    return True
         except Exception as e:
-            if str(e) != "'NoneType' object has no attribute 'get'" and str(e) != "cannot access local variable 'title' where it is not associated with a value":
-                logger.error(f"❌ Error inesperado en el loop principal: {e}")
+            logger.debug(f"Error comprobando procesos: {e}")
+        return False
+    
+    def clear_forced_game(self):
+        if self.forced_game:
+            logger.info(f"🧹 Modo forzado desactivado: {self.forced_game.get('name')}")
+            self.forced_game = None
+
+    def update_presence(self, game_info: Optional[dict]):
+        if getattr(self, "forced_game", None):
+            game_info = self.forced_game
+        current_game = game_info or None
+        game_changed = not self.is_same_game(self.last_game, current_game)
+        
+        status = None
+        if current_game and current_game.get("name") in self.games_map:
+            defaults = self.games_map[current_game["name"]]
+            merged = {**defaults, **current_game}  # defaults primero, current_game sobrescribe
+            current_game = merged
+
+       
+        if current_game and current_game.get("name") is None:
+            self.log_once("🛑 GeForce NOW está cerrado")
+            self.close_fake_executable()
             try:
                 self.rpc.clear()
             except Exception:
                 pass
+            self.last_game = None
+            return
+        
+            # ⚡ Opción B: intentar relanzar automáticamente GeForce NOW
+            # AppLauncher.launch_geforce_now()
+
+        
+        if game_changed:
+            self.close_fake_executable()
+            if current_game and current_game.get("executable_path"):
+                self.launch_fake_executable(current_game["executable_path"])
+
+        if not current_game:
+            if self.last_game is not None:
+                try:
+                    self.rpc.clear()
+                except Exception:
+                    pass
+                self.last_game = None
+            return
+
+        client_id = current_game.get("client_id") or self.client_id
+        if getattr(self.rpc, "client_id", None) != client_id:
             try:
+                self.rpc.clear()
                 self.rpc.close()
             except Exception:
                 pass
+            if client_id:
+                self._connect_rpc(client_id)
+                self.log_once(f"🔁 Cambiado client_id a {client_id}")
 
+        if status is None:
+            status = self.scraper.get_rich_presence() if current_game.get('steam_appid') else None
+
+        has_custom = current_game.get("client_id") and current_game.get("client_id") != self.client_id
+        if has_custom:
+            self.log_once(f"🔄 iniciando presencia para: {current_game.get('name', 'Desconocido')}")
+        else:
+            if current_game.get("name") != "GeForce NOW":
+                self.log_once(f"🔄 Usando client_id por defecto para: {current_game.get('name')}")
+        def split_status(s):
+            for sep in ["|", " - ", ":", "›", ">"]:
+                if sep in s:
+                    a, b = s.split(sep, 1)
+                    return a.strip(), b.strip()
+            return s.strip(), None
+
+        details, state = (split_status(status) if status else (None, None))
+        if not details and not has_custom:
+            rn = current_game.get('name', '').strip().lower()
+            details = TEXTS.get("menu", "Buscando qué jugar") if rn in ["geforce now", "Games", ""] else f"Jugando a {current_game.get('name')}"
+            if rn in ["geforce now", "Games", ""]:
+                current_game["image"] = "lib"
+
+        presence_data = {
+            "details": details,
+            "state": state,
+            "large_image": current_game.get('image', 'steam'),
+            "large_text": current_game.get('name'),
+            "small_image": current_game.get("icon_key") if current_game.get("icon_key") else None
+        }
+        try:
+            self.rpc.update(**{k: v for k, v in presence_data.items() if v})
+        except Exception as e:
+            msg = str(e).lower()
+            logger.error(f"❌ Error actualizando Presence: {e}")
+            if "pipe was closed" in msg or "socket.send()" in msg:
+                try:
+                    time.sleep(5) 
+                    self._connect_rpc(client_id)
+                    logger.info("🔁 Reconectado con Discord RPC tras error de socket")
+                except Exception as e2:
+                    logger.error(f"❌ Falló la reconexión a Discord RPC: {e2}")
+
+
+
+        self.last_game = dict(current_game) if isinstance(current_game, dict) else current_game
+    def is_same_game(self, g1: Optional[dict], g2: Optional[dict]) -> bool:
+        if g1 is None and g2 is None:
+            return True
+        if (g1 is None) != (g2 is None):
+            return False
+        for k in ("client_id", "executable_path", "name"):
+            if g1.get(k) != g2.get(k):
+                return False
+        return True
+    
+    def close(self):
+        if self.rpc:
+            try:
+                self.rpc.clear()
+                self.rpc.close()
+                self.close_fake_executable()
+                
+                
+                logger.info("🔴 Discord RPC cerrado correctamente.")
+            except Exception:
+                pass
+
+# ----------------- MAIN -----------------
 def main():
+    if not acquire_lock():
+        show_message("Error", TEXTS.get('already_running', 'Another instance of the program is already running.'), kind="error")
+        return
+    use_tray = PYSTRAY_AVAILABLE
+    if use_tray:
+        try:
+            tray_started = start_tray_icon(on_quit_callback=lambda: presence.close())
+            if not tray_started:
+                logger.info("Se usará notificación porque no se pudo iniciar tray.")
+        except Exception as e:
+            logger.debug(f"No se pudo iniciar tray: {e}")
+            tray_started = False
+
+    if not tray_started:
+        logger.error("❌ No se pudo iniciar el tray. Instala pystray y Pillow.")
+        sys.exit(1)
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--no-launch-geforce", action="store_true")
     parser.add_argument("--no-launch-discord", action="store_true")
     parser.add_argument("--verbose", action="store_true", help="Mostrar lista completa de juegos en carga")
     parser.add_argument("--no-keepalive", action="store_true", help="Desactivar keep-alive (si está activado)")
+    parser.add_argument("--tray", action="store_true", help="Forzar uso de icono en bandeja (si está disponible)")
     args = parser.parse_args()
+
 
     cfgm = ConfigManager(CONFIG_PATH_FILE)
     games = cfgm.get_game_mapping()
@@ -967,10 +1552,21 @@ def main():
     presence = PresenceManager(client_id=CLIENT_ID, games_map=games, cookie_manager=cookie_mgr,
                            test_rich_url=TEST_RICH_URL, update_interval=UPDATE_INTERVAL,
                            keep_alive=(not args.no_keepalive),
-                           eos_presence_url="http://localhost:5000/presence",
-                           eos_token_url="http://localhost:5000/token")
+                            )
 
-    presence.run_loop()
+    global PRESENCE_INSTANCE, COOKIE_MANAGER
+    PRESENCE_INSTANCE = presence
+    COOKIE_MANAGER = cookie_mgr
+
+
+    
+
+    try:
+        presence.run_loop()
+    finally:
+        # limpieza final
+        stop_tray_icon()
+        presence.close()
 
 if __name__ == "__main__":
     main()

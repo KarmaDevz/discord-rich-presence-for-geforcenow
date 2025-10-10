@@ -4,10 +4,11 @@ __pycache__/
 *.pyc
 config/config_path.txt
 *.log
-.spec
+*.spec
 dist/
 build/
 scripts/
 gameslist.json
 src/geforce_presence.exe
 src/gfn.ico
+Oportunidades.txt

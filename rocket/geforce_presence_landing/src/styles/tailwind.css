@@ -1,0 +1,147 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Core Colors */
+    --color-background: #0A0A0B; /* near-black */
+    --color-foreground: #F8FAFC; /* high-contrast white */
+    --color-border: rgba(255, 255, 255, 0.1); /* subtle white border */
+    --color-input: #1A1A1D; /* elevated dark surface */
+    --color-ring: #00D9FF; /* electric cyan */
+    
+    /* Card Colors */
+    --color-card: #1A1A1D; /* elevated dark surface */
+    --color-card-foreground: #F8FAFC; /* high-contrast white */
+    
+    /* Popover Colors */
+    --color-popover: #1A1A1D; /* elevated dark surface */
+    --color-popover-foreground: #F8FAFC; /* high-contrast white */
+    
+    /* Muted Colors */
+    --color-muted: rgba(255, 255, 255, 0.05); /* very subtle white */
+    --color-muted-foreground: #94A3B8; /* muted gray */
+    
+    /* Primary Colors */
+    --color-primary: #00D9FF; /* electric cyan */
+    --color-primary-foreground: #0A0A0B; /* near-black */
+    
+    /* Secondary Colors */
+    --color-secondary: #7C3AED; /* deep violet */
+    --color-secondary-foreground: #F8FAFC; /* high-contrast white */
+    
+    /* Destructive Colors */
+    --color-destructive: #EF4444; /* clear red */
+    --color-destructive-foreground: #F8FAFC; /* high-contrast white */
+    
+    /* Accent Colors */
+    --color-accent: #10B981; /* success green */
+    --color-accent-foreground: #F8FAFC; /* high-contrast white */
+    
+    /* Success Colors */
+    --color-success: #22C55E; /* bright green */
+    --color-success-foreground: #0A0A0B; /* near-black */
+    
+    /* Warning Colors */
+    --color-warning: #F59E0B; /* amber */
+    --color-warning-foreground: #0A0A0B; /* near-black */
+    
+    /* Error Colors */
+    --color-error: #EF4444; /* clear red */
+    --color-error-foreground: #F8FAFC; /* high-contrast white */
+    
+    /* Surface Color */
+    --color-surface: #1A1A1D; /* elevated dark surface */
+    
+    /* Text Colors */
+    --color-text-primary: #F8FAFC; /* high-contrast white */
+    --color-text-secondary: #94A3B8; /* muted gray */
+  }
+  
+  * {
+    @apply border-border;
+  }
+  
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Inter', sans-serif;
+  }
+  
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+@layer components {
+  /* Ambient Glow Effects */
+  .glow-primary {
+    box-shadow: 0 4px 6px rgba(0, 217, 255, 0.1), 0 10px 15px rgba(0, 0, 0, 0.3);
+  }
+  
+  .glow-primary-hover:hover {
+    box-shadow: 0 6px 12px rgba(0, 217, 255, 0.2), 0 15px 25px rgba(0, 0, 0, 0.4);
+    animation: pulse-glow 2s linear infinite;
+  }
+  
+  @keyframes pulse-glow {
+    0%, 100% { box-shadow: 0 6px 12px rgba(0, 217, 255, 0.2), 0 15px 25px rgba(0, 0, 0, 0.4); }
+    50% { box-shadow: 0 8px 16px rgba(0, 217, 255, 0.3), 0 20px 35px rgba(0, 0, 0, 0.5); }
+  }
+  
+  /* Glassmorphism Cards */
+  .glass-card {
+    backdrop-filter: blur(10px);
+    background: rgba(26, 26, 29, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+  }
+  
+  /* Gradient Mesh Backgrounds */
+  .gradient-mesh {
+    background: conic-gradient(from 0deg at 50% 50%, 
+      rgba(0, 217, 255, 0.1) 0deg, 
+      rgba(124, 58, 237, 0.1) 120deg, 
+      rgba(16, 185, 129, 0.1) 240deg, 
+      rgba(0, 217, 255, 0.1) 360deg);
+  }
+  
+  /* Micro-Interactions */
+  .micro-interact {
+    transition: transform 150ms ease-out, box-shadow 150ms ease-out, color 150ms ease-out;
+  }
+  
+  .micro-interact:hover {
+    transform: scale(1.02);
+  }
+  
+  .micro-interact:active {
+    transform: scale(0.98);
+  }
+  
+  /* Progressive Disclosure */
+  .progressive-disclosure {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 300ms ease-in-out;
+  }
+  
+  .progressive-disclosure.open {
+    max-height: 1000px;
+  }
+  
+  /* Typography Classes */
+  .font-heading {
+    font-family: 'Inter', sans-serif;
+  }
+  
+  .font-body {
+    font-family: 'Inter', sans-serif;
+  }
+  
+  .font-mono {
+    font-family: 'JetBrains Mono', monospace;
+  }
+}

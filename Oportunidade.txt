@@ -1,0 +1,2 @@
+1. Hacer que escoger archivo te lleve a /config
+2. Revisar instancias en ejecución del .exe

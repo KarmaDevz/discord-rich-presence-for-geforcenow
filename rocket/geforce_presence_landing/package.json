@@ -1,0 +1,93 @@
+{
+  "name": "geforce-presence-landing",
+  "version": "0.1.0",
+  "private": true,
+  "rocketCritical": {
+    "dependencies": [
+      "@dhiwise/component-tagger",
+      "react",
+      "react-dom",
+      "@reduxjs/toolkit",
+      "redux",
+      "react-router-dom"
+    ],
+    "devDependencies": [
+      "@vitejs/plugin-react",
+      "vite",
+      "vite-tsconfig-paths",
+      "tailwindcss",
+      "autoprefixer",
+      "postcss"
+    ],
+    "scripts": [
+      "start",
+      "build",
+      "serve"
+    ],
+    "warning": "🚨 CRITICAL: DO NOT REMOVE OR MODIFY ABOVE DEPENDENCIES - Required for app functionality"
+  },
+  "dependencies": {
+    "@dhiwise/component-tagger": "^1.0.10",
+    "@radix-ui/react-slot": "^1.2.3",
+    "@reduxjs/toolkit": "^2.6.1",
+    "@tailwindcss/forms": "^0.5.7",
+    "@testing-library/jest-dom": "^5.15.1",
+    "@testing-library/react": "^11.2.7",
+    "@testing-library/user-event": "^12.8.3",
+    "axios": "^1.8.4",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "d3": "^7.9.0",
+    "date-fns": "^4.1.0",
+    "dotenv": "^16.0.1",
+    "framer-motion": "^10.16.4",
+    "lucide-react": "^0.484.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-helmet": "^6.1.0",
+    "react-hook-form": "^7.55.0",
+    "react-router-dom": "6.0.2",
+    "react-router-hash-link": "^2.4.3",
+    "recharts": "^2.15.2",
+    "redux": "^5.0.1",
+    "tailwind-merge": "^3.3.1",
+    "tailwindcss-animate": "^1.0.7",
+    "tailwindcss-elevation": "^2.0.0",
+    "tailwindcss-fluid-type": "^2.0.7"
+  },
+  "scripts": {
+    "start": "vite",
+    "build": "vite build --sourcemap",
+    "serve": "vite preview"
+  },
+  "eslintConfig": {
+    "extends": [
+      "react-app",
+      "react-app/jest"
+    ]
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "devDependencies": {
+    "@tailwindcss/aspect-ratio": "^0.4.2",
+    "@tailwindcss/container-queries": "^0.1.1",
+    "@tailwindcss/line-clamp": "^0.1.0",
+    "@tailwindcss/typography": "^0.5.16",
+    "@vitejs/plugin-react": "4.3.4",
+    "autoprefixer": "10.4.2",
+    "postcss": "8.4.8",
+    "tailwindcss": "3.4.6",
+    "vite": "5.0.0",
+    "vite-tsconfig-paths": "3.6.0"
+  }
+}
