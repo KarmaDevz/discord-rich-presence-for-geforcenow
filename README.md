@@ -1,7 +1,6 @@
 <p align="center">
-  <img src="assets/discord_status.jpg" alt="GeForce NOW Rich Presence Screenshot 1" width="600"/>
-  <br/>
-  <img src="assets/discord_status2.jpg" alt="GeForce NOW Rich Presence Screenshot 2" width="600"/>
+  <img src="assets/discord_status.jpg" alt="GeForce NOW Rich Presence Screenshot 1" width="45%"/>
+  <img src="assets/discord_status2.jpg" alt="GeForce NOW Rich Presence Screenshot 2" width="45%"/>
 </p>
 
 <h1 align="center">🎮 GeForce NOW Rich Presence for Discord</h1>
