@@ -45,13 +45,10 @@
     },
     "Destiny 2": {
         "name": "Destiny 2",
-        "steam_appid": 1085660,
-        "client_id": "372438022647578634",
+        "steam_appid": "1085660",
+        "image": "steam",
         "executable_path": "destiny2.exe",
-        "cmsId": "102234811",
-        "uuid": "d1768dc1-b451-449a-8f7f-cf5b20f98f6f",
-        "shortName": "destiny_2_epic",
-        "appStore": "steam"
+        "client_id": "372438022647578634"
     },
     "The Outlast Trials": {
         "name": "The Outlast Trials",
@@ -194,9 +191,10 @@
     },
     "Rocket League": {
         "name": "Rocket League",
-        "client_id": "356877880938070016",
+        "steam_appid": null,
+        "image": "steam",
         "executable_path": "rocketleague.exe",
-        "appStore": "epic"
+        "client_id": "356877880938070016"
     },
     "Heroes of the Storm": {
         "name": "Heroes of the Storm",
@@ -33925,7 +33923,7 @@
     },
     "Amnesia: The Bunker": {
         "name": "Amnesia: The Bunker",
-        "steam_appid": null,
+        "steam_appid": "1944430",
         "client_id": "1124358261987102851",
         "executable_path": "amnesia the bunker/amnesiathebunker.exe",
         "cmsId": "102304311",
@@ -52117,7 +52115,7 @@
     },
     "Once Human": {
         "name": "Once Human",
-        "steam_appid": null,
+        "steam_appid": "2139460",
         "client_id": "1260340082150346932",
         "executable_path": "once human/once_human.exe",
         "cmsId": "102266911",
@@ -58374,9 +58372,10 @@
     },
     "R.E.P.O.": {
         "name": "R.E.P.O.",
-        "steam_appid": null,
-        "client_id": "1344368447928401961",
-        "executable_path": "repo/repo.exe"
+        "steam_appid": "3241660",
+        "image": "steam",
+        "executable_path": "repo/repo.exe",
+        "client_id": "1344368447928401961"
     },
     "MILFs of Sunville - Season 2": {
         "name": "MILFs of Sunville - Season 2",
@@ -64231,7 +64230,6 @@
     "": {
         "name": "",
         "steam_appid": null,
-        "client_id": "1095416975028650046",
         "image": "steam"
     },
     "Avatar: Frontiers of Pandora™": {
@@ -70796,5 +70794,48 @@
     "GTA 5": {
         "executable_path": "gears5.exe",
         "client_id": "1402418052569759815"
+    },
+    "Battlefiled": {
+        "executable_path": "bf1.exe",
+        "client_id": "358417041981571082"
+    },
+    "Def JAM": {
+        "executable_path": "win64/icon-win64-shipping.exe",
+        "client_id": "1124354341235601418"
+    },
+    "forn": {
+        "executable_path": "gorn.exe",
+        "client_id": "459465853600268289"
+    },
+    "The midnight walkers": {
+        "executable_path": "the midnight walkers demo/projectmw/binaries/win64/projectmw-win64-shipping.exe",
+        "client_id": "1425698395774783611"
+    },
+    "Warhammer 40,000: Space Marine 2 Demo": {
+        "name": "Warhammer 40,000: Space Marine 2 Demo",
+        "steam_appid": "2183900",
+        "image": "steam",
+        "executable_path": "space marine 2/start_protected_game.exe",
+        "client_id": "1281297844858257418"
+    },
+    "Amazon luna": {
+        "executable_path": "among us/among us.exe",
+        "client_id": "1402418440685486130"
+    },
+    "replanted": {
+        "executable_path": "plantera/plantera.exe",
+        "client_id": "1124354623168327690"
+    },
+    "pvz": {
+        "executable_path": "fph spedv/fph spedv.exe",
+        "client_id": "1124354327289548900"
+    },
+    "pvz replanted": {
+        "executable_path": "2012/vcredist_x86.exe",
+        "client_id": "428055627030331402"
+    },
+    "Plants vs. Zombies: Replanted": {
+        "executable_path": "pvz replanted/replanted.exe",
+        "client_id": "1431009382950506536"
     }
 }

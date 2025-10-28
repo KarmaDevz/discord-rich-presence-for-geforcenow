@@ -1,0 +1,1 @@
+C:\Proyectos\discord-rich-presence-geforcenow\config\games_config_merged.json

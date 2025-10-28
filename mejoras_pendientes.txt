@@ -1,0 +1,1 @@
+No hay una forma válida de salir del modo forzar juego sin cerrar el programa

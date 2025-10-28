@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import atexit
+import threading, time
 import json
 import difflib
 import logging
@@ -115,13 +116,11 @@ def start_tray_icon(on_quit_callback, title="GeForceNOW Presence"):
             show_message("Error", "Presencia no inicializada.", kind="error")
             return
 
-        # --- Crear ventana raíz invisible pero registrada ---
+        # --- Crear ventana raíz invisible ---
         root = tk.Tk()
+        root.withdraw()
         root.iconbitmap(default=str(ASSETS_DIR / "geforce.ico"))
         root.title("GeForceNOW Presence")
-        root.geometry("1x1+20000+20000")
-        root.attributes("-topmost", True)
-        root.update_idletasks()
 
         try:
             # --- Pedir nombre del juego ---
@@ -135,11 +134,11 @@ def start_tray_icon(on_quit_callback, title="GeForceNOW Presence"):
 
             options = []
             if candidates:
-                # coincidencias en JSON
+                # Coincidencias en JSON
                 for k in candidates:
                     options.append((k, gm[k].get("client_id"), gm[k].get("executable_path")))
             else:
-                # buscar en Discord
+                # Buscar en Discord
                 disc = PRESENCE_INSTANCE._find_discord_matches(game_name, max_candidates=5)
                 for c in disc:
                     options.append((c["name"], c["id"], c.get("exe")))
@@ -164,12 +163,12 @@ def start_tray_icon(on_quit_callback, title="GeForceNOW Presence"):
             lb.pack(padx=10, pady=10)
 
             sel = {"v": None}
+
             def ok():
                 if lb.curselection():
                     idx = lb.curselection()[0]
                     sel["v"] = options[idx]
                     top.destroy()
-                    
 
             def cancel():
                 sel["v"] = None
@@ -181,7 +180,7 @@ def start_tray_icon(on_quit_callback, title="GeForceNOW Presence"):
             btn_frame.pack(pady=(0, 10))
 
             # Esperar hasta que el usuario cierre el diálogo
-            top.mainloop()
+            root.wait_window(top)
 
             if not sel["v"]:
                 root.destroy()
@@ -189,38 +188,45 @@ def start_tray_icon(on_quit_callback, title="GeForceNOW Presence"):
 
             # --- Aplicar selección ---
             name, cid, exe = sel["v"]
+            
+
             if cid:
+                # Desconectamos RPC temporalmente antes de forzar el nuevo juego
+                try:
+                    def reconnect_after_delay():
+                        time.sleep(11)  # esperar 11 segundos (intervalo desfasado)
+                    PRESENCE_INSTANCE.rpc.close()
+                    logger.info("📴 RPC desconectado temporalmente (modo forzar juego).")
+                except Exception:
+                    pass
+
+                
+            try:
                 PRESENCE_INSTANCE.client_id = cid
                 PRESENCE_INSTANCE._connect_rpc(cid)
+                logger.info(f"🔁 RPC reconectado con client_id forzado: {cid}")
+            except Exception as e:
+                logger.error(f"❌ Error reconectando RPC tras forzar juego: {e}")
+
+                threading.Thread(target=reconnect_after_delay, daemon=True).start()
+
             if exe:
+                try:
+                    PRESENCE_INSTANCE.close_fake_executable()
+                except Exception as e:
+                    logger.debug(f"No se pudo cerrar ejecutable previo: {e}")
                 PRESENCE_INSTANCE.launch_fake_executable(exe)
 
-            show_message("OK", f"Juego forzado: {name}", kind="info")
-            # --- Aplicar selección ---
-            name, cid, exe = sel["v"]
-            if cid:
-                PRESENCE_INSTANCE.client_id = cid
-                PRESENCE_INSTANCE._connect_rpc(cid)
-            if exe:
-                PRESENCE_INSTANCE.launch_fake_executable(exe)
 
-            show_message("OK", f"Juego forzado: {name}", kind="info")
-
-            # Guardar el modo forzado usando la misma clave que espera update_presence()
             PRESENCE_INSTANCE.forced_game = {
                 "name": name,
                 "client_id": cid,
-                "executable_path": exe  # <<-- clave importante
+                "executable_path": exe
             }
-            # Evitar toggles inmediatos: sincronizar last_game con el forzado
-            try:
-                PRESENCE_INSTANCE.last_game = dict(PRESENCE_INSTANCE.forced_game)
-            except Exception:
-                pass
-
+            PRESENCE_INSTANCE.last_game = dict(PRESENCE_INSTANCE.forced_game)
             logger.info(f"🎮 Juego forzado activado: {name} (id={cid})")
 
-
+            show_message("OK", f"Juego forzado: {name}", kind="info")
 
         except Exception as e:
             show_message("Error", f"Ocurrió un error: {e}", kind="error")
@@ -232,7 +238,7 @@ def start_tray_icon(on_quit_callback, title="GeForceNOW Presence"):
 
     # --- crear menú ---
     menu = pystray.Menu(
-        pystray.MenuItem("Forzar juego...", _force_game),
+        pystray.MenuItem("Forzar juego...", _force_game),   
         pystray.MenuItem("Obtener cookie de Steam", _obtain_cookie),
         pystray.MenuItem("Abrir GeForce NOW", _open_geforce),
         pystray.MenuItem("Abrir logs", _open_logs),
@@ -440,8 +446,24 @@ def acquire_lock() -> bool:
             pid = int(LOCK_FILE.read_text().strip())
 
             if psutil.pid_exists(pid):
-                logger.info(f"Ya existe otra instancia (PID {pid})")
-                return False
+                logger.warning(f"⚠️ Ya existe otra instancia (PID {pid}). Reiniciando...")
+                try:
+                    # Cierra la instancia anterior (si es posible)
+                    p = psutil.Process(pid)
+                    p.terminate()
+                    p.wait(5)
+                    logger.info("✅ Instancia anter_ior finalizada correctamente.")
+                except Exception as e:
+                    logger.error(f"No se pudo cerrar la instancia anterior: {e}")
+                
+                time.sleep(2)
+
+                try:
+                    os.execv(sys.executable, [sys.executable] + sys.argv)
+                except Exception as e:
+                    logger.error(f"No se pudo reiniciar el programa: {e}")
+                    sys.exit(1)
+
             else:
 
                 LOCK_FILE.unlink()
@@ -954,7 +976,7 @@ def find_steam_appid_by_name(game_name: str) -> Optional[str]:
                 for app in data:
                     if app.get("name", "").lower() == game_name.lower():
                         return str(app.get("appid"))
-                if data:
+                if data:    
                     return str(data[0].get("appid"))
     except Exception as e:
         logger.error(f"Error buscando Steam AppID: {e}")
@@ -977,7 +999,8 @@ class PresenceManager:
         self.rpc = Presence(self.client_id)
         self._connect_rpc()
 
-        self.scraper = SteamScraper(self.cookie_manager.get_steam_cookie(), test_rich_url)
+        self.scraper = SteamScraper(self.cookie_manager.env_cookie, test_rich_url)
+
         self.last_game = None
         self.forced_game = None
 
@@ -988,6 +1011,10 @@ class PresenceManager:
 
     def _connect_rpc(self, client_id: Optional[str] = None):
         try:
+            try:
+                self.rpc.close()
+            except Exception:
+                pass
             client_id = client_id or self.client_id
             self.rpc = Presence(client_id)
             self.rpc.connect()
@@ -995,6 +1022,15 @@ class PresenceManager:
         except Exception as e:
             logger.error(f"❌ Error conectando a Discord RPC: {e}")
             self.rpc = None
+    def _disconnect_rpc_temporarily(self):
+        """Desconecta el RPC temporalmente (sin limpiar presencia)."""
+        try:
+            if self.rpc:
+                self.rpc.close()
+                self.rpc = None
+                logger.info("📴 RPC desconectado temporalmente (modo forzar juego activo).")
+        except Exception as e:
+            logger.debug(f"Error al desconectar RPC temporalmente: {e}")
 
     def wait_for_file_release(self, path: Path, timeout: float = 3.0) -> bool:
         start = time.time()
@@ -1395,6 +1431,7 @@ class PresenceManager:
     def update_presence(self, game_info: Optional[dict]):
         if getattr(self, "forced_game", None):
             game_info = self.forced_game
+
         current_game = game_info or None
         game_changed = not self.is_same_game(self.last_game, current_game)
         
@@ -1463,7 +1500,7 @@ class PresenceManager:
         details, state = (split_status(status) if status else (None, None))
         if not details and not has_custom:
             rn = current_game.get('name', '').strip().lower()
-            details = TEXTS.get("menu", "Buscando qué jugar") if rn in ["geforce now", "Games", ""] else f"Jugando a {current_game.get('name')}"
+            #details = TEXTS.get("menu", "Buscando qué jugar") if rn in ["geforce now", "Games", ""] else f"Jugando a {current_game.get('name')}"
             if rn in ["geforce now", "Games", ""]:
                 current_game["image"] = "lib"
 
