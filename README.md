@@ -1,8 +1,3 @@
-<p align="center">
-  <img src="assets/discord_status.jpg" alt="GeForce NOW Rich Presence Screenshot 1" width="45%"/>
-  <img src="assets/discord_status2.jpg" alt="GeForce NOW Rich Presence Screenshot 2" width="45%"/>
-</p>
-
 <h1 align="center">🎮 GeForce NOW Rich Presence for Discord</h1>
 
 <p align="center">
@@ -12,6 +7,13 @@
     <img src="https://img.shields.io/badge/⬇️%20Download%20Latest%20Release-00C853?style=for-the-badge&logo=github&logoColor=white" alt="Download Latest Release"/>
   </a>
 </p>
+
+
+<p align="center">
+  <img src="assets/discord_status.jpg" alt="GeForce NOW Rich Presence Screenshot 1" width="45%"/>
+  <img src="assets/discord_status2.jpg" alt="GeForce NOW Rich Presence Screenshot 2" width="45%"/>
+</p>
+
 
 ---
 
