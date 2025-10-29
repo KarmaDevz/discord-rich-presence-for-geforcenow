@@ -103,6 +103,12 @@ def start_tray_icon(on_quit_callback, title="GeForceNOW Presence"):
             if val:
                 save_cookie_to_env(val)
                 show_message("OK", "Steam cookie guardada.", kind="info")
+
+                # 🔁 Refrescar presencia sin reiniciar el programa
+                if PRESENCE_INSTANCE is not None:
+                    PRESENCE_INSTANCE.cookie_manager.env_cookie = val
+                    PRESENCE_INSTANCE.scraper = SteamScraper(val, PRESENCE_INSTANCE.test_rich_url)
+                    logger.info("🔁 SteamScraper actualizado con nueva cookie.")
             else:
                 show_message("Error", "No se pudo obtener la cookie.", kind="error")
         except Exception as e:
@@ -121,6 +127,10 @@ def start_tray_icon(on_quit_callback, title="GeForceNOW Presence"):
         root.withdraw()
         root.iconbitmap(default=str(ASSETS_DIR / "geforce.ico"))
         root.title("GeForceNOW Presence")
+        root.deiconify()
+        root.lift()
+        root.focus_force()
+        root.attributes('-topmost', True)
 
         try:
             # --- Pedir nombre del juego ---
