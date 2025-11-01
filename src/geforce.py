@@ -127,10 +127,11 @@ def start_tray_icon(on_quit_callback, title="GeForceNOW Presence"):
         root.withdraw()
         root.iconbitmap(default=str(ASSETS_DIR / "geforce.ico"))
         root.title("GeForceNOW Presence")
-        root.deiconify()
         root.lift()
-        root.focus_force()
-        root.attributes('-topmost', True)
+        root.attributes("-topmost", True)
+        root.after_idle(root.attributes, "-topmost", False)
+
+
 
         try:
             # --- Pedir nombre del juego ---
@@ -248,11 +249,11 @@ def start_tray_icon(on_quit_callback, title="GeForceNOW Presence"):
 
     # --- crear menú ---
     menu = pystray.Menu(
-        pystray.MenuItem("Forzar juego...", _force_game),   
-        pystray.MenuItem("Obtener cookie de Steam", _obtain_cookie),
-        pystray.MenuItem("Abrir GeForce NOW", _open_geforce),
-        pystray.MenuItem("Abrir logs", _open_logs),
-        pystray.MenuItem("Salir", _quit_action),
+        pystray.MenuItem(TEXTS.get("tray_force_game", "Force game..."), _force_game),
+        pystray.MenuItem(TEXTS.get("tray_get_cookie", "Obtain Steam cookie"), _obtain_cookie),
+        pystray.MenuItem(TEXTS.get("tray_open_geforce", "Open GeForce NOW"), _open_geforce),
+        pystray.MenuItem(TEXTS.get("tray_open_logs", "Open logs"), _open_logs),
+        pystray.MenuItem(TEXTS.get("tray_exit", "Exit"), _quit_action),
     )
 
     try:
@@ -1358,7 +1359,7 @@ class PresenceManager:
                     #   "image": "geforce_default"
                     #}
 
-                clean = re.sub(r'\s*(en|on|via)?\s*GeForce\s*NOW.*$', '', title, flags=re.IGNORECASE).strip()
+                clean = re.sub(r'\s*(en|on|in|via)?\s*GeForce\s*NOW.*$', '', title, flags=re.IGNORECASE).strip()
                 clean = re.sub(r'[®™]', '', clean).strip()
                 #if clean.lower() not in ["geforce now", "games", ""]:
                 #    logger.debug(f"|: {clean}")

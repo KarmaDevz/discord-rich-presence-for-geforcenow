@@ -11639,7 +11639,7 @@
     },
     "Tom Clancy's Rainbow Six Siege X": {
         "name": "Tom Clancy's Rainbow Six Siege X",
-        "steam_appid": null,
+        "steam_appid": "359550",
         "client_id": "356876590342340608",
         "executable_path": "rainbowsix_be.exe",
         "cmsId": "100065511",
@@ -70837,5 +70837,10 @@
     "Plants vs. Zombies: Replanted": {
         "executable_path": "pvz replanted/replanted.exe",
         "client_id": "1431009382950506536"
+    },
+    "Black Desert": {
+        "name": "Black Desert",
+        "steam_appid": "582660",
+        "image": "steam"
     }
 }
