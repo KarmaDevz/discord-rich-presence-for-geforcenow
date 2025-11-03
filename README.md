@@ -10,8 +10,7 @@
 
 
 <p align="center">
-  <img src="assets/discord_status.jpg" alt="GeForce NOW Rich Presence Screenshot 1" width="45%"/>
-  <img src="assets/discord_status2.jpg" alt="GeForce NOW Rich Presence Screenshot 2" width="45%"/>
+  <img src="assets/asset1.jpg" alt="GeForce NOW Rich Presence Screenshot 1" width="100%"/>
 </p>
 
 
