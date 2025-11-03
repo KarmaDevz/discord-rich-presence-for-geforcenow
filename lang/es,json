@@ -7,6 +7,8 @@
     "cookie_not_found": "No se pudo obtener automáticamente la cookie de Steam.",
     "cookie_auto_found": "Cookie de Steam obtenida automáticamente desde el perfil del navegador.",
     "tray_title": "GeForce NOW Presence",
+    "playing_solo": "Jugando solo",
+    "playing_in_group": "En grupo",
     "tray_menu_open_logs": "Abrir registros",
     "tray_menu_exit": "Salir",
     "menu": "Menú Principal",
