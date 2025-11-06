@@ -1,1 +1,5 @@
 No hay una forma válida de salir del modo forzar juego sin cerrar el programa
+On a group hay que quitarle la cantidad de jugadores
+Ver como manejar la cantidad maxima de equipo para todos los juegos
+El tiempo se reinicia cuando cambian los detalles del presence aunque esté en el mismo juego.
+En windows 11 las ventanas no se enfocan

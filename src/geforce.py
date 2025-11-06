@@ -51,6 +51,7 @@ PYSTRAY_AVAILABLE = True
 _tray_icon = None
 _tray_thread = None
 _tray_stop_event = threading.Event()
+
 def start_tray_icon(on_quit_callback, title="GeForceNOW Presence"):
     img_path = ASSETS_DIR / "geforce.ico"
 
@@ -63,7 +64,7 @@ def start_tray_icon(on_quit_callback, title="GeForceNOW Presence"):
         logger.info("pystray/Pillow no disponibles; no se mostrará icono en bandeja.")
         return False
 
-    # --- callbacks del menú ---
+    # --- Funciones de callback actualizadas ---
     def _quit_action(icon, item):
         logger.info("Cierre pedido desde icono de bandeja.")
         try:
@@ -99,7 +100,13 @@ def start_tray_icon(on_quit_callback, title="GeForceNOW Presence"):
             if COOKIE_MANAGER is None:
                 show_message("Error", "Cookie manager no disponible.", kind="error")
                 return
+            
+            # Crear ventana raíz con icono en barra de tareas
+            root = create_root_window("Obtain Steam Cookie")
+            root.deiconify()  # Mostrar la ventana para que aparezca en barra de tareas
+            
             val = COOKIE_MANAGER.ask_and_obtain_cookie()
+            
             if val:
                 save_cookie_to_env(val)
                 show_message("OK", "Steam cookie guardada.", kind="info")
@@ -111,28 +118,30 @@ def start_tray_icon(on_quit_callback, title="GeForceNOW Presence"):
                     logger.info("🔁 SteamScraper actualizado con nueva cookie.")
             else:
                 show_message("Error", "No se pudo obtener la cookie.", kind="error")
+                
+            root.destroy()
         except Exception as e:
             show_message("Error", f"Fallo al obtener cookie: {e}", kind="error")
 
-    def _force_game(icon, item):
-        import tkinter as tk
-        from tkinter import simpledialog
-
+    def _toggle_force_game(icon, item):
+        """Función unificada para forzar o detener el forzado de juego"""
         if PRESENCE_INSTANCE is None:
             show_message("Error", "Presencia no inicializada.", kind="error")
             return
 
-        # --- Crear ventana raíz invisible ---
-        root = tk.Tk()
-        root.withdraw()
-        root.iconbitmap(default=str(ASSETS_DIR / "geforce.ico"))
-        root.title("GeForceNOW Presence")
-        root.lift()
-        root.attributes("-topmost", True)
-        root.after_idle(root.attributes, "-topmost", False)
+        # Si ya hay un juego forzado, detenerlo
+        if PRESENCE_INSTANCE.forced_game:
+            PRESENCE_INSTANCE.stop_force_game()
+            show_message("OK", "Forzado de juego detenido.", kind="info")
+            return
 
-
-
+        # Si no hay juego forzado, iniciar el proceso de forzar juego
+        from tkinter import simpledialog
+        
+        # Crear ventana raíz principal
+        root = create_root_window("Force Game")
+        root.deiconify()  # Mostrar en barra de tareas
+        
         try:
             # --- Pedir nombre del juego ---
             game_name = simpledialog.askstring("Forzar juego", "Nombre del juego:", parent=root)
@@ -160,12 +169,9 @@ def start_tray_icon(on_quit_callback, title="GeForceNOW Presence"):
                 root.destroy()
                 return
 
-            # --- Crear ventana de selección ---
-            top = tk.Toplevel(root)
-            top.iconbitmap(default=str(ASSETS_DIR / "geforce.ico"))
-            top.title("Seleccionar juego")
-            top.attributes("-topmost", True)
-
+            # --- Crear ventana de selección como diálogo modal ---
+            top = create_modal_dialog(root, "Seleccionar juego")
+            
             tk.Label(top, text="Selecciona una coincidencia:").pack(padx=10, pady=(8, 4))
 
             lb = tk.Listbox(top, width=80, height=min(10, len(options)))
@@ -190,6 +196,13 @@ def start_tray_icon(on_quit_callback, title="GeForceNOW Presence"):
             tk.Button(btn_frame, text="Cancelar", command=cancel).pack(side="left")
             btn_frame.pack(pady=(0, 10))
 
+            # Configurar comportamiento al cerrar
+            top.protocol("WM_DELETE_WINDOW", cancel)
+            
+            # Establecer foco en el Listbox
+            lb.focus_set()
+            lb.selection_set(0)  # Seleccionar primer elemento por defecto
+
             # Esperar hasta que el usuario cierre el diálogo
             root.wait_window(top)
 
@@ -200,7 +213,6 @@ def start_tray_icon(on_quit_callback, title="GeForceNOW Presence"):
             # --- Aplicar selección ---
             name, cid, exe = sel["v"]
             
-
             if cid:
                 # Desconectamos RPC temporalmente antes de forzar el nuevo juego
                 try:
@@ -211,15 +223,13 @@ def start_tray_icon(on_quit_callback, title="GeForceNOW Presence"):
                 except Exception:
                     pass
 
-                
-            try:
-                PRESENCE_INSTANCE.client_id = cid
-                PRESENCE_INSTANCE._connect_rpc(cid)
-                logger.info(f"🔁 RPC reconectado con client_id forzado: {cid}")
-            except Exception as e:
-                logger.error(f"❌ Error reconectando RPC tras forzar juego: {e}")
-
-                threading.Thread(target=reconnect_after_delay, daemon=True).start()
+                try:
+                    PRESENCE_INSTANCE.client_id = cid
+                    PRESENCE_INSTANCE._connect_rpc(cid)
+                    logger.info(f"🔁 RPC reconectado con client_id forzado: {cid}")
+                except Exception as e:
+                    logger.error(f"❌ Error reconectando RPC tras forzar juego: {e}")
+                    threading.Thread(target=reconnect_after_delay, daemon=True).start()
 
             if exe:
                 try:
@@ -227,7 +237,6 @@ def start_tray_icon(on_quit_callback, title="GeForceNOW Presence"):
                 except Exception as e:
                     logger.debug(f"No se pudo cerrar ejecutable previo: {e}")
                 PRESENCE_INSTANCE.launch_fake_executable(exe)
-
 
             PRESENCE_INSTANCE.forced_game = {
                 "name": name,
@@ -247,20 +256,43 @@ def start_tray_icon(on_quit_callback, title="GeForceNOW Presence"):
             except:
                 pass
 
-    # --- crear menú ---
-    menu = pystray.Menu(
-        pystray.MenuItem(TEXTS.get("tray_force_game", "Force game..."), _force_game),
-        pystray.MenuItem(TEXTS.get("tray_get_cookie", "Obtain Steam cookie"), _obtain_cookie),
-        pystray.MenuItem(TEXTS.get("tray_open_geforce", "Open GeForce NOW"), _open_geforce),
-        pystray.MenuItem(TEXTS.get("tray_open_logs", "Open logs"), _open_logs),
-        pystray.MenuItem(TEXTS.get("tray_exit", "Exit"), _quit_action),
-    )
+    def _get_force_game_text(icon=None, item=None):
+        """Devuelve el texto dinámico para el ítem del menú (compatible con pystray)"""
+        if PRESENCE_INSTANCE and PRESENCE_INSTANCE.forced_game:
+            game_name = PRESENCE_INSTANCE.forced_game.get('name', 'Unknown')
+            # Acortar el nombre si es muy largo
+            if len(game_name) > 20:
+                game_name = game_name[:17] + "..."
+            return f"Stop forcing: {game_name}"
+        else:
+            return TEXTS.get("tray_force_game", "Force game...")
+
+    # --- crear menú dinámico ---
+    def create_dynamic_menu():
+        """Crea el menú dinámico basado en el estado actual"""
+        return pystray.Menu(
+            pystray.MenuItem(_get_force_game_text, _toggle_force_game),
+            pystray.MenuItem(TEXTS.get("tray_get_cookie", "Obtain Steam cookie"), _obtain_cookie),
+            pystray.MenuItem(TEXTS.get("tray_open_geforce", "Open GeForce NOW"), _open_geforce),
+            pystray.MenuItem(TEXTS.get("tray_open_logs", "Open logs"), _open_logs),
+            pystray.MenuItem(TEXTS.get("tray_exit", "Exit"), _quit_action),
+        )
 
     try:
-        icon = pystray.Icon("geforce_presence", Image.open(str(img_path)), title, menu)
+        icon = pystray.Icon("geforce_presence", Image.open(str(img_path)), title, menu=create_dynamic_menu())
     except Exception as e:
         logger.error(f"No se pudo crear Icon pystray: {e}")
         return False
+
+    # Función para actualizar el menú periódicamente
+    def update_menu_periodically():
+        while not _tray_stop_event.is_set():
+            try:
+                if _tray_icon:
+                    _tray_icon.update_menu()
+            except Exception as e:
+                logger.debug(f"Error actualizando menú: {e}")
+            time.sleep(2)  # Actualizar cada 2 segundos
 
     # doble-click (si backend lo soporta)
     try:
@@ -271,11 +303,19 @@ def start_tray_icon(on_quit_callback, title="GeForceNOW Presence"):
         pass
 
     def run_icon(): 
-        try: icon.run()
-        except Exception as e: logger.debug(f"Icon tray error: {e}")
+        try: 
+            icon.run()
+        except Exception as e: 
+            logger.debug(f"Icon tray error: {e}")
 
     _tray_icon = icon
-    _tray_thread = threading.Thread(target=run_icon, daemon=True); _tray_thread.start()
+    _tray_thread = threading.Thread(target=run_icon, daemon=True)
+    _tray_thread.start()
+    
+    # Iniciar hilo para actualizar el menú periódicamente
+    menu_updater_thread = threading.Thread(target=update_menu_periodically, daemon=True)
+    menu_updater_thread.start()
+    
     return True
 
 # ----------------- Helpers & resource paths -----------------
@@ -387,22 +427,42 @@ try:
 except Exception:
     logger.debug("python-dotenv no disponible o .env no encontrado; usando variables de entorno del sistema")
 
+def create_root_window(title="GeForceNOW Presence"):
+    """Crea una ventana raíz configurada para diálogos con icono en barra de tareas"""
+    root = tk.Tk()
+    root.iconbitmap(default=str(ASSETS_DIR / "geforce.ico"))
+    root.title(title)
+    root.withdraw()  # Ocultar la ventana principal pero mantener el icono
+    return root
 
+def create_modal_dialog(parent, title):
+    """Crea un diálogo modal con mejor manejo para Windows 11"""
+    dialog = tk.Toplevel(parent)
+    dialog.iconbitmap(default=str(ASSETS_DIR / "geforce.ico"))
+    dialog.title(title)
+    dialog.transient(parent)  # Establece relación padre-hijo
+    dialog.grab_set()  # Hace el diálogo modal
+    dialog.lift()
+    dialog.focus_force()
+    
+    # Centrar en la pantalla
+    dialog.update_idletasks()
+    x = parent.winfo_x() + (parent.winfo_width() - dialog.winfo_width()) // 2
+    y = parent.winfo_y() + (parent.winfo_height() - dialog.winfo_height()) // 2
+    dialog.geometry(f"+{x}+{y}")
+    
+    return dialog
 
 def show_message(title: str, message: str, kind: str = "info") -> None:
-    import tkinter as tk
-    from tkinter import messagebox
+    """Versión mejorada para Windows 11 que mantiene el foco"""
+    root = create_root_window(title)
+    
+    # Configuración específica para Windows 11
+    root.attributes("-topmost", True)
+    root.lift()
+    root.focus_force()
+    
     try:
-        root = tk.Tk()
-        root.iconbitmap(default=str(ASSETS_DIR / "geforce.ico"))
-        root.title("GeForceNOW Presence")
-
-        # Hacer la ventana raíz diminuta pero registrada en el sistema
-        root.geometry("1x1+20000+20000")  # la mueve fuera de la vista
-        root.attributes("-topmost", True)
-        root.update_idletasks()
-
-        # Mostrar el mensaje
         if kind == "info":
             messagebox.showinfo(title, message, parent=root)
         elif kind == "warning":
@@ -586,6 +646,7 @@ def _create_default_icon_image(size=64):
 
 def stop_tray_icon():
     global _tray_icon, _tray_thread
+    _tray_stop_event.set()  # Detener el hilo de actualización
     try:
         if _tray_icon:
             try:
@@ -595,7 +656,6 @@ def stop_tray_icon():
             _tray_icon = None
     except Exception:
         pass
-
 
 # ----------------- AppMonitor, ConfigManager, CookieManager, etc. (copiado y adaptado) -----------------
 class AppMonitor:
@@ -840,23 +900,21 @@ class CookieManager:
         logger.error("❌ No se pudo obtener cookie de Steam automáticamente.")
         return None
     def ask_and_obtain_cookie(self) -> Optional[str]:
-        """
-        Pregunta al usuario (terminal o GUI) si desea intentar obtener la cookie ahora.
-        Si acepta, intenta primero browser_cookie3, luego Selenium.
-        """
+        """Versión mejorada para Windows 11"""
         try:
-            should = show_message("Cookie", TEXTS.get('ask_cookie', 'The program will try to obtain your Steam cookie using Microsoft Edge. Make sure you are logged in to Steam in Edge.\n\nDo you want to continue?'), kind="askyesno")
+            should = show_message("Cookie", 
+                                TEXTS.get('ask_cookie', 'The program will try to obtain your Steam cookie using Microsoft Edge. Make sure you are logged in to Steam in Edge.\n\nDo you want to continue?'), 
+                                kind="askyesno")
 
             if not should:
                 logger.info("No se obtuvo cookie de Steam de forma interactiva.")
                 return None
 
-
+            # Resto del código igual...
             c = self.get_cookie_from_edge_profile()
             if c and self.validar_cookie(c):
                 save_cookie_to_env(c)
                 return c
-
 
             c2 = self.get_cookie_with_selenium(headless=False)
             if c2 and self.validar_cookie(c2):
@@ -865,10 +923,10 @@ class CookieManager:
 
             logger.warning("No se pudo obtener cookie automáticamente tras solicitud del usuario.")
             return None
+            
         except Exception as e:
             logger.error(f"Error en ask_and_obtain_cookie: {e}")
             return None
-
 # ----------------- AppLauncher, SteamScraper, PresenceManager (sin cambios funcionales importantes) -----------------
 class AppLauncher:
     @staticmethod
@@ -1103,6 +1161,36 @@ class PresenceManager:
         except Exception as e:
             logger.error(f"❌ Error conectando a Discord RPC: {e}")
             self.rpc = None
+    
+    def stop_force_game(self):
+        """Detiene el forzado de juego y vuelve a la detección automática"""
+        if self.forced_game:
+            forced_game_name = self.forced_game.get('name', 'Unknown')
+            logger.info(f"🧹 Deteniendo forzado de juego: {forced_game_name}")
+            
+            # Guardar el juego forzado para evitar reconexión automática
+            self._last_forced_game = self.forced_game.copy()
+            self.forced_game = None
+            self.last_game = None
+            
+            # Cerrar el ejecutable falso
+            self.close_fake_executable()
+            
+            # Desconectar RPC para reconectar con el client_id por defecto
+            try:
+                self.rpc.close()
+            except Exception:
+                pass
+            
+            # Reconectar con el client_id por defecto
+            self.client_id = "1095416975028650046"  # Client ID por defecto
+            self._connect_rpc(self.client_id)
+            
+            # Establecer un temporizador para evitar reconexión automática inmediata
+            self._force_stop_time = time.time()
+            
+            logger.info("🔄 Volviendo a detección automática de juegos")
+
     def _disconnect_rpc_temporarily(self):
         """Desconecta el RPC temporalmente (sin limpiar presencia)."""
         try:
@@ -1510,8 +1598,31 @@ class PresenceManager:
             self.forced_game = None
 
     def update_presence(self, game_info: Optional[dict]):
+        # Si hay un juego forzado, usarlo en lugar del juego detectado
         if getattr(self, "forced_game", None):
             game_info = self.forced_game
+            # Log periódico para indicar que está en modo forzado
+            current_time = time.time()
+            if not hasattr(self, "_last_forced_log") or current_time - self._last_forced_log > 300:  # Cada 5 minutos
+                logger.info(f"🔧 Modo forzado activo: {self.forced_game.get('name')}")
+                self._last_forced_log = current_time
+
+        # Evitar reconexión automática inmediata después de detener forzado
+        if (hasattr(self, "_force_stop_time") and 
+            getattr(self, "_last_forced_game", None) and 
+            game_info and 
+            game_info.get("name") == self._last_forced_game.get("name")):
+            
+            current_time = time.time()
+            if current_time - self._force_stop_time < 10:  # Evitar por 10 segundos
+                logger.debug(f"⏸️  Evitando reconexión automática a {game_info.get('name')} tras detener forzado")
+                # Limpiar presencia temporalmente
+                try:
+                    self.rpc.clear()
+                except Exception:
+                    pass
+                self.last_game = None
+                return
 
         current_game = game_info or None
         game_changed = not self.is_same_game(self.last_game, current_game)
@@ -1551,7 +1662,20 @@ class PresenceManager:
             return
 
         client_id = current_game.get("client_id") or self.client_id
-        if getattr(self.rpc, "client_id", None) != client_id:
+        
+        # Solo cambiar client_id si no estamos en el período de evitación
+        should_change_client = True
+        if (hasattr(self, "_force_stop_time") and 
+            getattr(self, "_last_forced_game", None) and 
+            current_game and 
+            current_game.get("name") == self._last_forced_game.get("name")):
+            
+            current_time = time.time()
+            if current_time - self._force_stop_time < 10:
+                should_change_client = False
+                client_id = self.client_id  # Usar client_id por defecto
+
+        if getattr(self.rpc, "client_id", None) != client_id and should_change_client:
             try:
                 self.rpc.clear()
                 self.rpc.close()
@@ -1618,6 +1742,15 @@ class PresenceManager:
                     logger.error(f"❌ Falló la reconexión a Discord RPC: {e2}")
 
         self.last_game = dict(current_game) if isinstance(current_game, dict) else current_game
+        
+        # Limpiar el estado de evitación después del período
+        if (hasattr(self, "_force_stop_time") and 
+            time.time() - self._force_stop_time >= 10):
+            if hasattr(self, "_last_forced_game"):
+                del self._last_forced_game
+            if hasattr(self, "_force_stop_time"):
+                del self._force_stop_time
+
     def is_same_game(self, g1: Optional[dict], g2: Optional[dict]) -> bool:
         if g1 is None and g2 is None:
             return True
