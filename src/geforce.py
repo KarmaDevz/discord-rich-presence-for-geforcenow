@@ -1341,10 +1341,11 @@ class PresenceManager:
 
             entry = games_config.get(game_key, {}) or {}
 
+            # CAMBIO AQUÍ: usar asignación directa en lugar de setdefault
             if match.get("exe"):
-                entry.setdefault("executable_path", match["exe"])
+                entry["executable_path"] = match["exe"]
             if match.get("id"):
-                entry.setdefault("client_id", match["id"])
+                entry["client_id"] = match["id"]  # ← ASIGNACIÓN DIRECTA
             games_config[game_key] = entry
             save_json(games_config, config_path)
             # actualizar en memoria
@@ -1354,7 +1355,7 @@ class PresenceManager:
         except Exception as e:
             logger.error(f"❌ Error aplicando discord match: {e}")
             return False
-
+            
     def _show_match_dialog(self, game_key: str, candidates: list, timeout: int = DISCORD_ASK_TIMEOUT):
         """
         Muestra una ventana tkinter con las mejores coincidencias. Devuelve match seleccionado o None.
@@ -1400,7 +1401,7 @@ class PresenceManager:
             root.mainloop()
         except Exception as e:
             logger.debug(f"Error en dialog match: {e}")
-        return selected["value"]
+            return selected["value"]
 
     def _ask_discord_match_for_new_game(self, game_key: str):
         """
@@ -1410,12 +1411,16 @@ class PresenceManager:
         - Si no hay candidatos -> no hace nada
         """
         try:
+            logger.info(f"🔍 Buscando coincidencias en Discord para: '{game_key}'")
             candidates = self._find_discord_matches(game_key, max_candidates=6)
+            
             if not candidates:
                 logger.info(f"ℹ️ No se encontraron matches en Discord para '{game_key}'")
                 return
+            
             top = candidates[0]
-            logger.debug(f"Discord top candidate for '{game_key}': {top.get('name')} (score={top.get('score'):.2f})")
+            logger.info(f"🎯 Discord top candidate for '{game_key}': {top.get('name')} (score={top.get('score'):.2f})")
+            
             # auto apply si muy seguro
             if top.get("score", 0) >= DISCORD_AUTO_APPLY_THRESHOLD:
                 applied = self._apply_discord_match(game_key, top)
@@ -1423,13 +1428,102 @@ class PresenceManager:
                     logger.info(f"🔁 Aplicado automaticamente match Discord: {top.get('name')} (score {top.get('score'):.2f})")
                 return
 
-            sel = self._show_match_dialog(game_key, candidates, timeout=DISCORD_ASK_TIMEOUT)
+            # Crear una ventana raíz temporal para el diálogo
+            logger.info(f"🔄 Creando diálogo para '{game_key}'")
+            
+            # Ejecutar el diálogo directamente en este hilo con una nueva instancia de Tk
+            sel = self._show_match_dialog_simple(game_key, candidates)
+            
             if sel:
-                self._apply_discord_match(game_key, sel)
+                logger.info(f"✅ Usuario seleccionó: {sel.get('name')}")
+                applied = self._apply_discord_match(game_key, sel)
+                if applied:
+                    logger.info(f"🔁 Match aplicado exitosamente para '{game_key}'")
+                else:
+                    logger.error(f"❌ Falló al aplicar match para '{game_key}'")
             else:
-                logger.info(f"ℹ️ Usuario ignoró/timeout match Discord para '{game_key}'")
+                logger.info(f"ℹ️ Usuario ignoró match Discord para '{game_key}'")
+                
         except Exception as e:
-            logger.debug(f"Error en ask_discord_match_for_new_game: {e}")
+            logger.error(f"❌ Error en ask_discord_match_for_new_game: {e}")
+
+    def _show_match_dialog_simple(self, game_key: str, candidates: list, timeout: int = DISCORD_ASK_TIMEOUT):
+        """
+        Versión simplificada del diálogo que crea su propia instancia de Tkinter
+        """
+        selected = {"value": None}
+        
+        try:
+            # Crear ventana raíz
+            root = tk.Tk()
+            root.withdraw()  # Ocultar ventana principal
+            
+            # Crear diálogo
+            top = tk.Toplevel(root)
+            top.title(f"Coincidencia Discord: {game_key}")
+            top.attributes("-topmost", True)
+            
+            # Centrar en pantalla
+            top.update_idletasks()
+            x = (top.winfo_screenwidth() - top.winfo_width()) // 2
+            y = (top.winfo_screenheight() - top.winfo_height()) // 2
+            top.geometry(f"+{x}+{y}")
+            
+            # Label
+            tk.Label(top, text=f"Se encontró un nuevo juego: '{game_key}'.\nSelecciona la coincidencia correcta (si alguna):", 
+                    justify="left").pack(padx=10, pady=6)
+            
+            # Listbox
+            lb = tk.Listbox(top, width=80, height=min(8, max(3, len(candidates))))
+            lb.pack(padx=10, pady=(0, 6))
+            
+            # Llenar listbox
+            for c in candidates:
+                exe = c.get("exe") or ""
+                lb.insert(tk.END, f"{c['name']}  ({c['score']:.2f})  [{exe}]  id={c.get('id') or '—'}")
+            
+            # Botones
+            def on_confirm():
+                sel = lb.curselection()
+                if sel:
+                    idx = sel[0]
+                    selected["value"] = candidates[idx]
+                root.quit()
+                root.destroy()
+                
+            def on_ignore():
+                root.quit()
+                root.destroy()
+                
+            btn_frame = tk.Frame(top)
+            tk.Button(btn_frame, text="Confirmar", command=on_confirm).pack(side="left", padx=6)
+            tk.Button(btn_frame, text="Ignorar", command=on_ignore).pack(side="left")
+            btn_frame.pack(pady=(0, 10))
+            
+            # Seleccionar primer elemento por defecto
+            lb.selection_set(0)
+            lb.focus_set()
+            
+            # Manejar cierre de ventana
+            top.protocol("WM_DELETE_WINDOW", on_ignore)
+            
+            # Timeout
+            def on_timeout():
+                try:
+                    root.quit()
+                    root.destroy()
+                except:
+                    pass
+                    
+            top.after(int(timeout * 1000), on_timeout)
+            
+            # Ejecutar el diálogo
+            root.mainloop()
+            
+        except Exception as e:
+            logger.error(f"❌ Error en show_match_dialog_simple: {e}")
+        
+        return selected["value"]
 
     def run_loop(self):
         logger.info("🟢 Iniciando monitor de presencia...")

@@ -70842,5 +70842,12 @@
         "name": "Black Desert",
         "steam_appid": "582660",
         "image": "steam"
+    },
+    "World of Warcraft: Mists of Pandaria Classic": {
+        "name": "World of Warcraft: Mists of Pandaria Classic",
+        "steam_appid": null,
+        "image": "steam",
+        "executable_path": "_ptr_/wow.exe",
+        "client_id": "356875762940379136"
     }
 }
