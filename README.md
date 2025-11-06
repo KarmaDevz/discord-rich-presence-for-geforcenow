@@ -1,3 +1,5 @@
+[🇪🇸 Leer en Español](./README.es.md)
+
 <h1 align="center">🎮 GeForce NOW Rich Presence for Discord</h1>
 
 <p align="center">
