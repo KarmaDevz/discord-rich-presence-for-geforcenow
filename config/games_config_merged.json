@@ -70849,5 +70849,21 @@
         "image": "steam",
         "executable_path": "_ptr_/wow.exe",
         "client_id": "356875762940379136"
+    },
+    "Forza horit": {
+        "executable_path": "forza motorsport/forza_steamworks_release_final.exe",
+        "client_id": "1161181430911598633"
+    },
+    "dsa": {
+        "executable_path": "lisa.exe",
+        "client_id": "484572816977428490"
+    },
+    "Stuck t": {
+        "executable_path": "stick rpg 2/stick rpg 2 director's cut.exe",
+        "client_id": "1124356487108640859"
+    },
+    "arc rai": {
+        "executable_path": "arcade/arcadeparadise.exe",
+        "client_id": "1136675849626714142"
     }
 }

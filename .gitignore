@@ -1,5 +1,5 @@
 .env
-.venv/
+.venv*
 __pycache__/
 *.pyc
 config/config_path.txt
@@ -17,3 +17,4 @@ rocket/
 my-app/
 pyinstaller.bat
 instalador.iss
+geforce.py

@@ -15,9 +15,12 @@ import subprocess
 import threading
 import time
 import stat
+import pystray
 import asyncio
 import inspect
 from pathlib import Path
+import queue
+from tkinter import simpledialog, messagebox
 import tkinter as tk
 from tkinter import filedialog, messagebox
 import winreg
@@ -35,7 +38,6 @@ from selenium import webdriver
 from selenium.common.exceptions import WebDriverException
 from selenium.webdriver.edge.options import Options
 from selenium.webdriver.edge.service import Service as EdgeService
-import pystray
 from PIL import Image, ImageDraw
 
 logger = logging.getLogger("geforce_presence")
@@ -51,7 +53,52 @@ PYSTRAY_AVAILABLE = True
 _tray_icon = None
 _tray_thread = None
 _tray_stop_event = threading.Event()
+# ----------------- Main thread for TKinter ----------------- #
+class GuiDispatcher:
+    def __init__(self):
+        self.q = queue.Queue()
+        self.ready = threading.Event()
+        threading.Thread(target=self._gui_thread, daemon=True).start()
+        self.ready.wait()
 
+    def _gui_thread(self):
+        self.root = tk.Tk()
+        self.root.withdraw()
+        self.ready.set()
+        self._process_queue()
+        self.root.mainloop()
+
+    def _process_queue(self):
+        while not self.q.empty():
+            fn, args, kwargs, ret = self.q.get()
+            try:
+                result = fn(*args, **kwargs)
+                ret["value"] = result
+            except Exception as e:
+                ret["value"] = e
+            finally:
+                # 🔹 Importante: señalizamos que ya terminó (aunque result sea None)
+                ret["done"] = True
+        self.root.after(50, self._process_queue)
+
+    def call(self, fn, *args, **kwargs):
+        ret = {"value": None, "done": False}
+        self.q.put((fn, args, kwargs, ret))
+        while not ret.get("done"):
+            time.sleep(0.05)
+        return ret.get("value")
+
+    @staticmethod
+    def safe_destroy(window):
+        """Cierra una ventana Tkinter de forma segura (sin lanzar errores)."""
+        try:
+            if window and hasattr(window, "winfo_exists") and window.winfo_exists():
+                window.destroy()
+        except Exception:
+            pass
+
+GUI = GuiDispatcher()
+# --- Tray Icon -------# 
 def start_tray_icon(on_quit_callback, title="GeForceNOW Presence"):
     img_path = ASSETS_DIR / "geforce.ico"
 
@@ -98,7 +145,7 @@ def start_tray_icon(on_quit_callback, title="GeForceNOW Presence"):
     def _obtain_cookie(icon, item):
         try:
             if COOKIE_MANAGER is None:
-                show_message("Error", "Cookie manager no disponible.", kind="error")
+                threading.Thread(target=lambda: show_message("Error", "Cookie manager no disponible.", kind="error"), daemon=True).start()
                 return
             
             # Crear ventana raíz con icono en barra de tareas
@@ -109,7 +156,7 @@ def start_tray_icon(on_quit_callback, title="GeForceNOW Presence"):
             
             if val:
                 save_cookie_to_env(val)
-                show_message("OK", "Steam cookie guardada.", kind="info")
+                GUI.call(messagebox.showinfo, "OK", "Steam cookie guardada.")
 
                 # 🔁 Refrescar presencia sin reiniciar el programa
                 if PRESENCE_INSTANCE is not None:
@@ -117,144 +164,145 @@ def start_tray_icon(on_quit_callback, title="GeForceNOW Presence"):
                     PRESENCE_INSTANCE.scraper = SteamScraper(val, PRESENCE_INSTANCE.test_rich_url)
                     logger.info("🔁 SteamScraper actualizado con nueva cookie.")
             else:
-                show_message("Error", "No se pudo obtener la cookie.", kind="error")
+                threading.Thread(target=lambda: show_message("Error", "No se pudo obtener la cookie.", kind="error"), daemon=True).start()
                 
-            root.destroy()
-        except Exception as e:
-            show_message("Error", f"Fallo al obtener cookie: {e}", kind="error")
+            GUI.safe_destroy(root)
 
+        except Exception as e:
+            threading.Thread(target=lambda: show_message("Error", f"Fallo al obtener cookie: {e}", kind="error"), daemon=True).start()
+            
     def _toggle_force_game(icon, item):
-        """Función unificada para forzar o detener el forzado de juego"""
+        """Función unificada para forzar o detener el forzado de juego - VERSIÓN CORREGIDA"""
         if PRESENCE_INSTANCE is None:
-            show_message("Error", "Presencia no inicializada.", kind="error")
+            GUI.call(lambda: show_message("Error", "Presencia no inicializada.", kind="error"))
             return
 
         # Si ya hay un juego forzado, detenerlo
         if PRESENCE_INSTANCE.forced_game:
             PRESENCE_INSTANCE.stop_force_game()
-            show_message("OK", "Forzado de juego detenido.", kind="info")
+            GUI.call(lambda: show_message("OK", "Forzado de juego detenido.", kind="info"))
             return
 
-        # Si no hay juego forzado, iniciar el proceso de forzar juego
-        from tkinter import simpledialog
-        
-        # Crear ventana raíz principal
-        root = create_root_window("Force Game")
-        root.deiconify()  # Mostrar en barra de tareas
-        
-        try:
-            # --- Pedir nombre del juego ---
-            game_name = simpledialog.askstring("Forzar juego", "Nombre del juego:", parent=root)
-            if not game_name:
-                root.destroy()
-                return
+        def force_game_flow():
+            try:
+                # --- Pedir nombre del juego ---
+                GUI.root.deiconify()
+                GUI.root.lift()
+                GUI.root.attributes("-topmost", True)
+                game_name = simpledialog.askstring(
+                    "Forzar juego",
+                    "Nombre del juego:",
+                    parent=GUI.root
+                )
+                GUI.root.attributes("-topmost", False)
+                if not game_name:
+                    return
 
-            gm = PRESENCE_INSTANCE.games_map or {}
-            candidates = [k for k in gm if game_name.lower() in k.lower()]
+                gm = PRESENCE_INSTANCE.games_map or {}
+                candidates = [k for k in gm if game_name.lower() in k.lower()]
 
-            options = []
-            if candidates:
-                # Coincidencias en JSON
-                for k in candidates:
-                    options.append((k, gm[k].get("client_id"), gm[k].get("executable_path")))
-            else:
-                # Buscar en Discord
-                disc = PRESENCE_INSTANCE._find_discord_matches(game_name, max_candidates=5)
-                for c in disc:
-                    options.append((c["name"], c["id"], c.get("exe")))
-                    PRESENCE_INSTANCE._apply_discord_match(game_name, c)
+                options = []
+                if candidates:
+                    for k in candidates:
+                        options.append((k, gm[k].get("client_id"), gm[k].get("executable_path")))
+                else:
+                    disc = PRESENCE_INSTANCE._find_discord_matches(game_name, max_candidates=5)
+                    for c in disc:
+                        options.append((c["name"], c["id"], c.get("exe")))
+                        PRESENCE_INSTANCE._apply_discord_match(game_name, c)
 
-            if not options:
-                show_message("Info", "Sin coincidencias en JSON ni Discord.")
-                root.destroy()
-                return
+                if not options:
+                    show_message("Info", "Sin coincidencias en JSON ni Discord.")
+                    return
 
-            # --- Crear ventana de selección como diálogo modal ---
-            top = create_modal_dialog(root, "Seleccionar juego")
-            
-            tk.Label(top, text="Selecciona una coincidencia:").pack(padx=10, pady=(8, 4))
+                # --- Crear ventana de selección ---
+                top = tk.Toplevel(GUI.root)
+                top.title("Seleccionar juego")
+                top.transient(GUI.root)
+                top.grab_set()
+                top.attributes("-topmost", True)
+                top.lift()
+                top.focus_force()
+                top.geometry("600x400")
 
-            lb = tk.Listbox(top, width=80, height=min(10, len(options)))
-            for name, cid, exe in options:
-                lb.insert(tk.END, f"{name} — id={cid}")
-            lb.pack(padx=10, pady=10)
+                # Centrar ventana
+                top.update_idletasks()
+                x = GUI.root.winfo_x() + (GUI.root.winfo_width() - top.winfo_width()) // 2
+                y = GUI.root.winfo_y() + (GUI.root.winfo_height() - top.winfo_height()) // 2
+                top.geometry(f"+{x}+{y}")
 
-            sel = {"v": None}
+                tk.Label(top, text="Selecciona una coincidencia:").pack(padx=10, pady=(8, 4))
 
-            def ok():
-                if lb.curselection():
-                    idx = lb.curselection()[0]
-                    sel["v"] = options[idx]
+                lb = tk.Listbox(top, width=80, height=min(10, len(options)))
+                for name, cid, exe in options:
+                    lb.insert(tk.END, f"{name} — id={cid}")
+                lb.pack(padx=10, pady=10, fill=tk.BOTH, expand=True)
+
+                sel = {"v": None}
+
+                def ok():
+                    if lb.curselection():
+                        idx = lb.curselection()[0]
+                        sel["v"] = options[idx]
                     top.destroy()
 
-            def cancel():
-                sel["v"] = None
-                top.destroy()
+                def cancel():
+                    sel["v"] = None
+                    top.destroy()
 
-            btn_frame = tk.Frame(top)
-            tk.Button(btn_frame, text="Aceptar", command=ok).pack(side="left", padx=5)
-            tk.Button(btn_frame, text="Cancelar", command=cancel).pack(side="left")
-            btn_frame.pack(pady=(0, 10))
+                btn_frame = tk.Frame(top)
+                tk.Button(btn_frame, text="Aceptar", command=ok).pack(side="left", padx=5)
+                tk.Button(btn_frame, text="Cancelar", command=cancel).pack(side="left")
+                btn_frame.pack(pady=(0, 10))
 
-            # Configurar comportamiento al cerrar
-            top.protocol("WM_DELETE_WINDOW", cancel)
-            
-            # Establecer foco en el Listbox
-            lb.focus_set()
-            lb.selection_set(0)  # Seleccionar primer elemento por defecto
+                top.protocol("WM_DELETE_WINDOW", cancel)
+                lb.focus_set()
+                lb.selection_set(0)
 
-            # Esperar hasta que el usuario cierre el diálogo
-            root.wait_window(top)
+                GUI.root.wait_window(top)
 
-            if not sel["v"]:
-                root.destroy()
-                return
+                if not sel["v"]:
+                    return
 
-            # --- Aplicar selección ---
-            name, cid, exe = sel["v"]
-            
-            if cid:
-                # Desconectamos RPC temporalmente antes de forzar el nuevo juego
-                try:
-                    def reconnect_after_delay():
-                        time.sleep(11)  # esperar 11 segundos (intervalo desfasado)
-                    PRESENCE_INSTANCE.rpc.close()
-                    logger.info("📴 RPC desconectado temporalmente (modo forzar juego).")
-                except Exception:
-                    pass
+                name, cid, exe = sel["v"]
 
-                try:
-                    PRESENCE_INSTANCE.client_id = cid
-                    PRESENCE_INSTANCE._connect_rpc(cid)
-                    logger.info(f"🔁 RPC reconectado con client_id forzado: {cid}")
-                except Exception as e:
-                    logger.error(f"❌ Error reconectando RPC tras forzar juego: {e}")
-                    threading.Thread(target=reconnect_after_delay, daemon=True).start()
+                if cid:
+                    try:
+                        PRESENCE_INSTANCE.rpc.close()
+                        logger.info("📴 RPC desconectado temporalmente (modo forzar juego).")
+                    except Exception:
+                        pass
 
-            if exe:
-                try:
-                    PRESENCE_INSTANCE.close_fake_executable()
-                except Exception as e:
-                    logger.debug(f"No se pudo cerrar ejecutable previo: {e}")
-                PRESENCE_INSTANCE.launch_fake_executable(exe)
+                    try:
+                        PRESENCE_INSTANCE.client_id = cid
+                        PRESENCE_INSTANCE._connect_rpc(cid)
+                        logger.info(f"🔁 RPC reconectado con client_id forzado: {cid}")
+                    except Exception as e:
+                        logger.error(f"❌ Error reconectando RPC tras forzar juego: {e}")
 
-            PRESENCE_INSTANCE.forced_game = {
-                "name": name,
-                "client_id": cid,
-                "executable_path": exe
-            }
-            PRESENCE_INSTANCE.last_game = dict(PRESENCE_INSTANCE.forced_game)
-            logger.info(f"🎮 Juego forzado activado: {name} (id={cid})")
+                if exe:
+                    try:
+                        PRESENCE_INSTANCE.close_fake_executable()
+                    except Exception as e:
+                        logger.debug(f"No se pudo cerrar ejecutable previo: {e}")
+                    PRESENCE_INSTANCE.launch_fake_executable(exe)
 
-            show_message("OK", f"Juego forzado: {name}", kind="info")
+                PRESENCE_INSTANCE.forced_game = {
+                    "name": name,
+                    "client_id": cid,
+                    "executable_path": exe
+                }
+                PRESENCE_INSTANCE.last_game = dict(PRESENCE_INSTANCE.forced_game)
+                logger.info(f"🎮 Juego forzado activado: {name} (id={cid})")
 
-        except Exception as e:
-            show_message("Error", f"Ocurrió un error: {e}", kind="error")
-        finally:
-            try:
-                root.destroy()
-            except:
-                pass
+                show_message("OK", f"Juego forzado: {name}", kind="info")
+
+            except Exception as e:
+                logger.error(f"Error en toggle_force_game: {e}")
+                show_message("Error", f"Ocurrió un error: {e}", kind="error")
+
+        # ✅ Ejecutar todo el flujo en el hilo principal de Tkinter
+        GUI.call(force_game_flow)
 
     def _get_force_game_text(icon=None, item=None):
         """Devuelve el texto dinámico para el ítem del menú (compatible con pystray)"""
@@ -287,12 +335,15 @@ def start_tray_icon(on_quit_callback, title="GeForceNOW Presence"):
     # Función para actualizar el menú periódicamente
     def update_menu_periodically():
         while not _tray_stop_event.is_set():
+            if getattr(GUI, "is_busy", False):
+                time.sleep(2)
+                continue
             try:
                 if _tray_icon:
                     _tray_icon.update_menu()
             except Exception as e:
                 logger.debug(f"Error actualizando menú: {e}")
-            time.sleep(2)  # Actualizar cada 2 segundos
+            time.sleep(5)
 
     # doble-click (si backend lo soporta)
     try:
@@ -302,11 +353,15 @@ def start_tray_icon(on_quit_callback, title="GeForceNOW Presence"):
     except Exception:
         pass
 
-    def run_icon(): 
-        try: 
-            icon.run()
-        except Exception as e: 
+    def run_icon():
+        try:
+            if hasattr(icon, "run_detached"):
+                icon.run_detached()  # No bloquea el hilo principal del icono
+            else:
+                icon.run()
+        except Exception as e:
             logger.debug(f"Icon tray error: {e}")
+
 
     _tray_icon = icon
     _tray_thread = threading.Thread(target=run_icon, daemon=True)
@@ -323,7 +378,10 @@ def resource_path(*parts):
     if getattr(sys, "frozen", False):
         base = Path(getattr(sys, "_MEIPASS", Path(sys.executable).parent))
     else:
+        # Para desarrollo
         base = Path(__file__).resolve().parent.parent
+        # Para produccion
+        #base = Path(__file__).resolve().parent
     return base.joinpath(*parts)
 
 BASE_DIR = resource_path("")      
@@ -335,7 +393,7 @@ driver_path = resource_path("tools", "msedgedriver.exe")
 LOG_FILE = LOGS_DIR / "geforce_presence.log"
 ENV_PATH = resource_path(".env")
 DISCORD_DETECTABLE_URL = "https://discord.com/api/v9/applications/detectable"
-DISCORD_CACHE_PATH = LOGS_DIR / "discord_apps_cache.json"
+DISCORD_CACHE_PATH = CONFIG_DIR / "discord_apps_cache.json"
 DISCORD_CACHE_TTL = 60 * 60
 DISCORD_AUTO_APPLY_THRESHOLD = 0.88  
 DISCORD_ASK_TIMEOUT = 30  
@@ -367,7 +425,7 @@ def load_locale(lang: str = "en") -> dict:
         return json.loads(path.read_text(encoding="utf-8"))
     return json.loads((LANG_DIR / "en.json").read_text(encoding="utf-8"))
 
-
+ 
 try:
     LANG = get_lang_from_registry()
     TEXTS = load_locale(LANG)
@@ -428,12 +486,16 @@ except Exception:
     logger.debug("python-dotenv no disponible o .env no encontrado; usando variables de entorno del sistema")
 
 def create_root_window(title="GeForceNOW Presence"):
-    """Crea una ventana raíz configurada para diálogos con icono en barra de tareas"""
-    root = tk.Tk()
+    """Devuelve la raíz principal si existe (GUI.root), en lugar de crear una nueva."""
+    if hasattr(GUI, "root") and GUI.root:
+        root = GUI.root
+    else:
+        root = tk.Tk()
+        GUI.root = root
     root.iconbitmap(default=str(ASSETS_DIR / "geforce.ico"))
     root.title(title)
-    root.withdraw()  # Ocultar la ventana principal pero mantener el icono
     return root
+
 
 def create_modal_dialog(parent, title):
     """Crea un diálogo modal con mejor manejo para Windows 11"""
@@ -453,31 +515,40 @@ def create_modal_dialog(parent, title):
     
     return dialog
 
-def show_message(title: str, message: str, kind: str = "info") -> None:
-    """Versión mejorada para Windows 11 que mantiene el foco"""
-    root = create_root_window(title)
+def show_message(title: str, message: str, kind: str = "info"):
+    """Versión mejorada y estable para Windows 11"""
+    root = tk.Tk()
+    root.iconbitmap(default=str(ASSETS_DIR / "geforce.ico"))
+    root.title(title)
+    root.withdraw()
     
-    # Configuración específica para Windows 11
+    # Configuración para Windows 11
     root.attributes("-topmost", True)
-    root.lift()
-    root.focus_force()
     
-    try:
-        if kind == "info":
-            messagebox.showinfo(title, message, parent=root)
-        elif kind == "warning":
-            messagebox.showwarning(title, message, parent=root)
-        elif kind == "error":
-            messagebox.showerror(title, message, parent=root)
-        elif kind == "askyesno":
-            return messagebox.askyesno(title, message, parent=root)
-    except Exception as e:
-        logger.error(f"Error mostrando mensaje: {e}")
-    finally:
+    result = None
+    
+    def show_dialog():
+        nonlocal result
         try:
-            root.destroy()
-        except:
-            pass
+            if kind == "info":
+                result = messagebox.showinfo(title, message, parent=root)
+            elif kind == "warning":
+                result = messagebox.showwarning(title, message, parent=root)
+            elif kind == "error":
+                result = messagebox.showerror(title, message, parent=root)
+            elif kind == "askyesno":
+                result = messagebox.askyesno(title, message, parent=root)
+        except Exception as e:
+            logger.error(f"Error en show_message: {e}")
+        finally:
+            root.quit()
+    
+    # Mostrar después de un breve delay
+    root.after(100, show_dialog)
+    root.mainloop()
+    root.destroy()
+    
+    return result
 
 def ensure_driver_executable(src_path: Path) -> str:
     try:
@@ -697,7 +768,7 @@ class ConfigManager:
         self._load()
 
     def _load(self):
-
+        # 1. Si existe config_path_file, úsalo
         if self.config_path_file.exists():
             try:
                 p = Path(self.config_path_file.read_text(encoding="utf-8").strip())
@@ -707,56 +778,38 @@ class ConfigManager:
                         self.games_config = j
                         self.games_config_path = p
                         logger.info(f"✅ Configuración cargada desde: {p}")
-                        logger.info(f"ruta de configuración: {self.config_path_file}")
                         self._log_games_summary(verbose=True)
                         return
                     else:
-                        logger.warning("⚠️ El archivo games_config no contiene un objeto JSON.")
+                        logger.warning("⚠️ El archivo no contiene un JSON válido.")
             except Exception as e:
                 logger.warning(f"⚠️ No se pudo leer config_path_file: {e}")
 
+        # 2. Búsqueda automática sin GUI
+        posibles = [
+            CONFIG_DIR / "games_config.json",
+            CONFIG_DIR / "games_config_merged.json",
+            Path("games_config.json"),
+            Path("games_config_merged.json")
+        ]
 
-        try:
-            root = tk.Tk()
-            root.withdraw()
-            logger.info("📁 Selecciona tu archivo games_config.json (dialog)...")
-            initialdir = str(CONFIG_DIR) if CONFIG_DIR.exists() else str(Path.home())
-            initialfile = "games_config.json"
-
-            suggested = Path(initialdir) / initialfile
-            if suggested.exists():
-                p = suggested
-                self.games_config_path = p
+        for p in posibles:
+            if p.exists():
+                logger.info(f"✅ Archivo encontrado automáticamente: {p}")
                 self.games_config = safe_json_load(p) or {}
+                self.games_config_path = p
                 try:
                     self.config_path_file.write_text(str(p), encoding="utf-8")
                 except Exception as e:
                     logger.warning(f"⚠️ No se pudo escribir config_path_file: {e}")
-                logger.info(f"✅ Configuración guardada: {self.config_path_file}")
                 self._log_games_summary()
                 return
 
-            p_str = filedialog.askopenfilename(
-                title="Selecciona el archivo games_config_merged.json",
-                filetypes=[("JSON Files", "*.json")],
-                initialdir=CONFIG_DIR,
-                initialfile="games_config_merged.json"
-            )
-            if not p_str:
-                logger.error("❌ No se seleccionó ningún archivo.")
-                show_message("Error", TEXTS.get('error_no_config', 'No configuration file found. Please select one.'), kind="error")
-                return
-            p = Path(p_str)
-            self.games_config_path = p
-            self.games_config = safe_json_load(p) or {}
-            try:
-                self.config_path_file.write_text(str(p), encoding="utf-8")
-            except Exception as e:
-                logger.warning(f"⚠️ No se pudo escribir config_path_file: {e}")
-            logger.info(f"✅ Configuración guardada: {self.config_path_file}")
-            self._log_games_summary()
-        except Exception as e:
-            logger.error(f"❌ No se pudo abrir diálogo para seleccionar config: {e}")
+        # 3. Si no se encontró nada
+        logger.error("❌ No se encontró ningún archivo de configuración automáticamente.")
+        logger.error(f"Buscado en: {[str(p) for p in posibles]}")
+        show_message("Error", TEXTS.get('error_no_config', 'No configuration file found.'), kind="error")
+        
 
     def _log_games_summary(self, verbose=False):
         count = len(self.games_config)
@@ -927,6 +980,8 @@ class CookieManager:
         except Exception as e:
             logger.error(f"Error en ask_and_obtain_cookie: {e}")
             return None
+        
+
 # ----------------- AppLauncher, SteamScraper, PresenceManager (sin cambios funcionales importantes) -----------------
 class AppLauncher:
     @staticmethod
@@ -1382,9 +1437,9 @@ class PresenceManager:
                 if sel:
                     idx = sel[0]
                     selected["value"] = candidates[idx]
-                top.destroy()
+                GUI.safe_destroy(top)
             def on_ignore():
-                top.destroy()
+                GUI.safe_destroy(top)
             btn_frame = tk.Frame(top)
             tk.Button(btn_frame, text="Confirmar", command=on_confirm).pack(side="left", padx=6)
             tk.Button(btn_frame, text="Ignorar", command=on_ignore).pack(side="left")
@@ -1392,7 +1447,7 @@ class PresenceManager:
 
             def on_timeout():
                 try:
-                    top.destroy()
+                    GUI.safe_destroy(top)
                 except Exception:
                     pass
             top.after(int(timeout * 1000), on_timeout)
@@ -1489,11 +1544,11 @@ class PresenceManager:
                     idx = sel[0]
                     selected["value"] = candidates[idx]
                 root.quit()
-                root.destroy()
+                GUI.safe_destroy(root)
                 
             def on_ignore():
                 root.quit()
-                root.destroy()
+                GUI.safe_destroy(root)
                 
             btn_frame = tk.Frame(top)
             tk.Button(btn_frame, text="Confirmar", command=on_confirm).pack(side="left", padx=6)
@@ -1511,7 +1566,7 @@ class PresenceManager:
             def on_timeout():
                 try:
                     root.quit()
-                    root.destroy()
+                    GUI.safe_destroy(root)
                 except:
                     pass
                     
@@ -1564,21 +1619,17 @@ class PresenceManager:
             sys.exit(0)
 
         except Exception as e:
-            if str(e) not in (
-                "'NoneType' object has no attribute 'get'",
-                "cannot access local variable 'title' where it is not associated with a value",
-            ):
-                logger.error(f"❌ Error inesperado en el loop principal: {e}")
+            logger.error(f"❌ Error inesperado en el loop principal: {e}")
+            time.sleep(3)
+            # Reintentar conexión RPC sin matar el programa
             try:
-                self.rpc.clear()
-            except Exception:
-                pass
-            try:
-                self.rpc.close()
-            except Exception:
-                pass
-            self.close_fake_executable()
-            sys.exit(1)
+                self._connect_rpc(self.client_id)
+            except Exception as e2:
+                logger.error(f"⚠️ Falló reconexión RPC tras error: {e2}")
+            # Regresar al loop principal
+            return self.run_loop()
+
+
 
     def find_active_game(self) -> Optional[dict]:
         try:
@@ -1809,13 +1860,15 @@ class PresenceManager:
         elif current_game.get("party_size"):
             # Si el juego tiene party_size definido en la configuración
             party_size_data = current_game.get("party_size")
-
+        if game_changed:
+            self.start_time = time.time()
         presence_data = {
             "details": details,
             "state": state,
             "large_image": current_game.get('image', 'steam'),
             "large_text": current_game.get('name'),
-            "small_image": current_game.get("icon_key") if current_game.get("icon_key") else None
+            "small_image": current_game.get("icon_key") if current_game.get("icon_key") else None,
+            "start": getattr(self, "start_time", time.time())
         }
         
         # Agregar party_size solo si está disponible
