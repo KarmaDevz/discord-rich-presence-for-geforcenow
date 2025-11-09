@@ -70865,5 +70865,13 @@
     "arc rai": {
         "executable_path": "arcade/arcadeparadise.exe",
         "client_id": "1136675849626714142"
+    },
+    "World of Warcraft: The War Within": {
+        "name": "World of Warcraft: The War Within",
+        "steam_appid": null,
+        "image": "steam",
+        "executable_path": "_retail_/wow-64.exe",
+        "client_id": "356875762940379136"
     }
+    
 }
