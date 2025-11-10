@@ -1,9 +1,8 @@
-[🇪🇸 Leer en Español](./README.es.md)
-
 <h1 align="center">🎮 GeForce NOW Rich Presence for Discord</h1>
 
 <p align="center">
   Show your real game on Discord while playing on <strong>GeForce NOW</strong> — automatically and beautifully.
+  [🇪🇸 Leer en Español](./README.es.md)
   <br/><br/>
   <a href="https://github.com/KarmaDevz/discord-rich-presence-for-geforcenow/releases/latest">
     <img src="https://img.shields.io/badge/⬇️%20Download%20Latest%20Release-00C853?style=for-the-badge&logo=github&logoColor=white" alt="Download Latest Release"/>
