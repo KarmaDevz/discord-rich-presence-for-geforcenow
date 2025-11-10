@@ -1,6 +1,7 @@
 <p align="center"> GeForce NOW Rich Presence for Discord:
 Automatically show your real GeForce NOW game in your Discord Rich Presence  
-Perfect for Discord Quests, GFN users, and streamers who want their status updated beautifully in real time. </p>p
+Perfect for Discord Quests, GFN users, and streamers who want their status updated beautifully in real time. 
+</p>
 
 [🇪🇸 Leer en Español](./README.es.md)
 
