@@ -1,3 +1,8 @@
+## 💖 Apoya el proyecto
+
+Si te funcionó y deseas apoyar el proyecto, deja una estrellita o apoya su deasarrollo :) [![Donate](https://img.shields.io/badge/Donate-PayPal-blue.svg)](https://paypal.me/TuNombre)
+
+
 <h1 align="center">🎮 Presencia Enriquecida de GeForce NOW para Discord</h1>
 
 <p align="center">
