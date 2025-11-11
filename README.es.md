@@ -5,7 +5,11 @@
   <br/><br/>
   <a href="https://github.com/KarmaDevz/discord-rich-presence-for-geforcenow/releases/latest">
     <img src="https://img.shields.io/badge/⬇️%20Descargar%20Última%20Versión-00C853?style=for-the-badge&logo=github&logoColor=white" alt="Descargar última versión"/>
-  </a>
+
+  <br>
+<a href="https://paypal.me/KarmaDevz" target="_blank">
+  <img src="https://img.shields.io/badge/💖%20Apoyar%20en%20PayPal-0070ba?style=for-the-badge&logo=paypal&logoColor=white" alt="Donar en PayPal">
+</a>
 </p>
 
 <p align="center">
