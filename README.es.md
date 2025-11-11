@@ -7,8 +7,6 @@
     <img src="https://img.shields.io/badge/⬇️%20Descargar%20Última%20Versión-00C853?style=for-the-badge&logo=github&logoColor=white" alt="Descargar última versión"/>
 
   <br>
-Si te funciona y deseas apoyar el proyecto, deja una estrellita o apoya su deasarrollo :)
-<br>
 <a href="https://paypal.me/KarmaDevz" target="_blank">
   <img src="https://img.shields.io/badge/💖%20Apoyar%20en%20PayPal-0070ba?style=for-the-badge&logo=paypal&logoColor=white" alt="Donar en PayPal">
 </a>
