@@ -54,6 +54,7 @@
         "name": "The Outlast Trials",
         "steam_appid": 1304930,
         "client_id": "1400696164055121973",
+        
         "executable_path": "win64/totclient-win64-shipping.exe",
         "cmsId": "102005811",
         "uuid": "941b7ef9-2151-4253-9547-dfe8d771b13d",
@@ -70872,6 +70873,9 @@
         "image": "steam",
         "executable_path": "_retail_/wow-64.exe",
         "client_id": "356875762940379136"
+    },
+    "Broderlands": {
+        "executable_path": "roguelands.exe",
+        "client_id": "483421234391154698"
     }
-    
 }

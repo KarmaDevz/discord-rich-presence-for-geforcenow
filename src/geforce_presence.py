@@ -145,32 +145,50 @@ def start_tray_icon(on_quit_callback, title="GeForceNOW Presence"):
     def _obtain_cookie(icon, item):
         try:
             if COOKIE_MANAGER is None:
-                threading.Thread(target=lambda: show_message("Error", "Cookie manager no disponible.", kind="error"), daemon=True).start()
+                # Mostrar error desde el hilo GUI
+                threading.Thread(
+                    target=lambda: GUI.call(messagebox.showerror, "Error", "Cookie manager no disponible."),
+                    daemon=True
+                ).start()
                 return
-            
-            # Crear ventana raíz con icono en barra de tareas
-            root = create_root_window("Obtain Steam Cookie")
-            root.deiconify()  # Mostrar la ventana para que aparezca en barra de tareas
-            
-            val = COOKIE_MANAGER.ask_and_obtain_cookie()
-            
-            if val:
-                save_cookie_to_env(val)
-                GUI.call(messagebox.showinfo, "OK", "Steam cookie guardada.")
 
-                # 🔁 Refrescar presencia sin reiniciar el programa
-                if PRESENCE_INSTANCE is not None:
-                    PRESENCE_INSTANCE.cookie_manager.env_cookie = val
-                    PRESENCE_INSTANCE.scraper = SteamScraper(val, PRESENCE_INSTANCE.test_rich_url)
-                    logger.info("🔁 SteamScraper actualizado con nueva cookie.")
-            else:
-                threading.Thread(target=lambda: show_message("Error", "No se pudo obtener la cookie.", kind="error"), daemon=True).start()
-                
-            GUI.safe_destroy(root)
+
+            def worker():
+                def cookie_flow():
+                    # Crear y mostrar la ventana en el hilo GUI
+                    root = create_root_window("Obtain Steam Cookie")
+                    root.deiconify()
+                    try:
+                        val = COOKIE_MANAGER.ask_and_obtain_cookie()
+                        return val
+                    finally:
+                        GUI.safe_destroy(root)
+
+                # Ejecutar el flujo GUI en el hilo principal
+                val = GUI.call(cookie_flow)
+
+                if val:
+                    # NO guardar cookie de nuevo (ya lo hace CookieManager internamente)
+                    GUI.call(messagebox.showinfo, "OK", "Steam cookie guardada correctamente.")
+                    if PRESENCE_INSTANCE is not None:
+                        PRESENCE_INSTANCE.cookie_manager.env_cookie = val
+                        PRESENCE_INSTANCE.scraper = SteamScraper(val, PRESENCE_INSTANCE.test_rich_url)
+                        logger.info("🔁 SteamScraper actualizado con nueva cookie.")
+                        pass
+                else:
+                    GUI.call(messagebox.showerror, "Error", "No se pudo obtener la cookie.")
+
+            # Lanzar el proceso en segundo plano para no bloquear el menú contextual
+            threading.Thread(target=worker, daemon=True).start()
 
         except Exception as e:
-            threading.Thread(target=lambda: show_message("Error", f"Fallo al obtener cookie: {e}", kind="error"), daemon=True).start()
-            
+            # Mostrar error sin bloquear el menú
+            threading.Thread(
+                target=lambda: GUI.call(messagebox.showerror, "Error", f"Fallo al obtener cookie: {e}"),
+                daemon=True
+            ).start()
+
+
     def _toggle_force_game(icon, item):
         """Función unificada para forzar o detener el forzado de juego - VERSIÓN CORREGIDA"""
         if PRESENCE_INSTANCE is None:
@@ -296,6 +314,11 @@ def start_tray_icon(on_quit_callback, title="GeForceNOW Presence"):
                 logger.info(f"🎮 Juego forzado activado: {name} (id={cid})")
 
                 show_message("OK", f"Juego forzado: {name}", kind="info")
+                try:
+                    GUI.root.withdraw()
+                    GUI.root.attributes("-topmost", False)
+                except Exception as e:
+                    logger.debug(f"No se pudo ocultar la ventana principal tras forzar juego: {e}")
 
             except Exception as e:
                 logger.error(f"Error en toggle_force_game: {e}")
@@ -952,35 +975,82 @@ class CookieManager:
 
         logger.error("❌ No se pudo obtener cookie de Steam automáticamente.")
         return None
+
     def ask_and_obtain_cookie(self) -> Optional[str]:
-        """Versión mejorada para Windows 11"""
+        """Versión mejorada para Windows 11 — evita blur en diálogos y ventanas."""
         try:
-            should = show_message("Cookie", 
-                                TEXTS.get('ask_cookie', 'The program will try to obtain your Steam cookie using Microsoft Edge. Make sure you are logged in to Steam in Edge.\n\nDo you want to continue?'), 
-                                kind="askyesno")
+            # --- Restaurar foco y visibilidad de la ventana principal ---
+            try:
+                GUI.root.deiconify()
+                GUI.root.lift()
+                GUI.root.attributes("-topmost", True)
+                GUI.root.focus_force()
+            except Exception:
+                logger.debug("No se pudo levantar la ventana principal antes del diálogo.")
+
+            # --- Preguntar al usuario si desea continuar ---
+            should = show_message(
+                "Cookie",
+                TEXTS.get(
+                    'ask_cookie',
+                    "The program will try to obtain your Steam cookie using Microsoft Edge. "
+                    "Make sure you are logged in to Steam in Edge.\n\nDo you want to continue?"
+                ),
+                kind="askyesno"
+            )
+
+            # --- Restablecer atributos visuales ---
+            try:
+                GUI.root.attributes("-topmost", False)
+                GUI.root.update()
+            except Exception:
+                pass
 
             if not should:
-                logger.info("No se obtuvo cookie de Steam de forma interactiva.")
+                logger.info("User canceled cookie retrieval.")
                 return None
 
-            # Resto del código igual...
+            # --- Intentar obtener cookie desde perfil de Edge ---
             c = self.get_cookie_from_edge_profile()
             if c and self.validar_cookie(c):
                 save_cookie_to_env(c)
+                show_message("OK", "Steam cookie successfully retrieved from Edge profile.", kind="info")
                 return c
 
+            # --- Intentar con Selenium (abre navegador visible) ---
+            # ⚠️ Aseguramos foco correcto antes de lanzar navegador para evitar blur
+            try:
+                GUI.root.deiconify()
+                GUI.root.lift()
+                GUI.root.attributes("-topmost", True)
+                GUI.root.focus_force()
+            except Exception:
+                pass
+
+            logger.info("🌐 Attempting to obtain Steam cookie with Selenium...")
             c2 = self.get_cookie_with_selenium(headless=False)
             if c2 and self.validar_cookie(c2):
                 save_cookie_to_env(c2)
+                show_message("OK", "Steam cookie successfully obtained with Selenium.", kind="info")
                 return c2
 
-            logger.warning("No se pudo obtener cookie automáticamente tras solicitud del usuario.")
+            logger.warning("❌ Could not obtain Steam cookie automatically after user confirmation.")
+            show_message("Warning", "Could not obtain Steam cookie automatically.", kind="warning")
             return None
-            
+
         except Exception as e:
-            logger.error(f"Error en ask_and_obtain_cookie: {e}")
+            logger.error(f"Error in ask_and_obtain_cookie: {e}")
+            show_message("Error", f"An error occurred while obtaining the cookie: {e}", kind="error")
             return None
-        
+
+        finally:
+            # --- Restaurar estado visual normal de la ventana ---
+            try:
+                GUI.root.attributes("-topmost", False)
+                GUI.root.update()
+            except Exception:
+                pass
+
 
 # ----------------- AppLauncher, SteamScraper, PresenceManager (sin cambios funcionales importantes) -----------------
 class AppLauncher:
@@ -1846,13 +1916,6 @@ class PresenceManager:
                 state = TEXTS.get("playing_solo", "Playing solo")
             else:
                 state = TEXTS.get("playing_in_group", f"On a Group ({group_size} players)")
-        
-        if not details and not current_game.get("client_id"):
-            rn = current_game.get('name', '').strip().lower()
-            if rn in ["geforce now", "Games", ""]:
-                current_game["image"] = "lib"
-
-        # Preparar party_size dinámicamente
         party_size_data = None
         if group_size is not None:
             # Si tenemos group_size, usarlo para party_size
@@ -1860,6 +1923,10 @@ class PresenceManager:
         elif current_game.get("party_size"):
             # Si el juego tiene party_size definido en la configuración
             party_size_data = current_game.get("party_size")
+        if not details and not current_game.get("client_id"):
+            rn = current_game.get('name', '').strip().lower()
+            if rn in ["geforce now", "Games", ""]:
+                current_game["image"] = "lib"
         if game_changed:
             self.start_time = time.time()
         presence_data = {
