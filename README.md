@@ -3,13 +3,6 @@ Automatically show your real GeForce NOW game in your Discord Rich Presence
 Perfect for Discord Quests, GFN users, and streamers who want their status updated beautifully in real time. 
 </p>
 
-## 💖 Support the Project
-
-If you enjoy using this project and want to support its development:
-
-[![Donate](https://img.shields.io/badge/Donate-PayPal-blue.svg)](https://paypal.me/KarmaDevz)
-
-
 [🇪🇸 Leer en Español](./README.es.md)
 
 <h1 align="center">🎮 GeForce NOW Rich Presence for Discord</h1>
@@ -20,6 +13,10 @@ If you enjoy using this project and want to support its development:
   <a href="https://github.com/KarmaDevz/discord-rich-presence-for-geforcenow/releases/latest">
     <img src="https://img.shields.io/badge/⬇️%20Download%20Latest%20Release-00C853?style=for-the-badge&logo=github&logoColor=white" alt="Download Latest Release"/>
   </a>
+  <br>
+<a href="https://paypal.me/KarmaDevz" target="_blank">
+  <img src="https://img.shields.io/badge/💖%20Paypal%20Donations-0070ba?style=for-the-badge&logo=paypal&logoColor=white" alt="Paypal Donations">
+</a>
 </p>
 
 
