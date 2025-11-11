@@ -1,6 +1,7 @@
 ## 💖 Apoya el proyecto
 
 Si te funcionó y deseas apoyar el proyecto, deja una estrellita o apoya su deasarrollo :)
+<br>
 <a href="https://paypal.me/KarmaDevz" target="_blank">
   <img src="https://img.shields.io/badge/💖%20Apoyar%20en%20PayPal-0070ba?style=for-the-badge&logo=paypal&logoColor=white" alt="Donar en PayPal">
 </a>
