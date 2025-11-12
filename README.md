@@ -74,7 +74,7 @@ It’s 100% automatic — no need to configure anything.
 When running, the app shows an icon in your Windows tray (bottom-right corner).  
 From there, you can:
 - 🎮 **Force Game** — manually choose which game to display  
-- 🔄 **Restart Detection** — refresh the current session  
+- ✅ **Get Steam Cookie** — for show Steam Rich Presence
 - 🚀 **Open GeForce NOW**  
 - ❌ **Exit the app**
 
